@@ -1,0 +1,11 @@
+fastapi<1,>=0.115
+uvicorn<1,>=0.34
+PyYAML<7,>=6
+jsonschema<5,>=4.23
+httpx<1,>=0.28
+cryptography<48,>=44
+redis<7,>=5
+
+[dev]
+pytest<10,>=8
+ruff<1,>=0.9

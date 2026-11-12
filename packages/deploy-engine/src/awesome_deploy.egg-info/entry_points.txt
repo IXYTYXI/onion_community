@@ -1,0 +1,4 @@
+[console_scripts]
+awesome-deploy = awesome_deploy.cli:main
+awesome-deploy-intake = awesome_deploy.intake_server:main
+awesome-deploy-team = awesome_deploy.team_server:main
