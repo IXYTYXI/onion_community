@@ -3,7 +3,8 @@ import { reactive } from "vue";
 import { auth } from "./services/auth.js";
 import { repository } from "./services/content.js";
 
-export const navigation = reactive({ pending: "", error: "" });
+export const navigation = reactive({ pending: "", error: "", content: null });
+let navigationId = 0;
 const definitions = [
   ["index", "home", "Home", "首页"],
   ["cases", "cases", "Cases", "案例库"],
@@ -45,19 +46,19 @@ export const router = createRouter({
   },
 });
 router.beforeEach(async (to, from) => {
-  if (to.path === from.path && from.meta.content && ["cases", "news"].includes(to.name)) {
-    to.meta.content = from.meta.content;
-    return;
-  }
+  if (to.path === from.path && to.search === from.search && navigation.content) return;
+  ++navigationId;
   navigation.pending = to.path;
   navigation.error = "";
+  // A signed-in client can show the next route using the current snapshot.
+  // Protected API requests and the session check run after the route commits.
+  if (auth.user && navigation.content) return;
   try {
-    // Every menu navigation still verifies the server session.
     await auth.refresh();
-    to.meta.content = await repository.getContent({
+    navigation.content = await repository.getContent({
       page: to.meta.page,
       search: new URL(to.fullPath, location.origin).search,
-      });
+    });
   } catch (error) {
     navigation.error = error.message || "页面暂时无法加载，请重试。";
     navigation.pending = "";
@@ -66,12 +67,38 @@ router.beforeEach(async (to, from) => {
   }
 });
 router.afterEach((to, from, failure) => {
-  navigation.pending = "";
-  if (failure) return;
+  if (failure) {
+    navigation.pending = "";
+    return;
+  }
   document.body.dataset.page = to.meta.page;
   document.body.className =
     to.meta.page === "profile" ? "profile-page" : "portal-body";
   document.title = `${to.meta.title} — OWS Community`;
+  if (!from.name || (to.path === from.path && to.search === from.search)) {
+    navigation.pending = "";
+    return;
+  }
+  const currentId = navigationId;
+  const previous = navigation.content;
+  navigation.content = { ...previous, loading: true };
+  Promise.all([
+    auth.refresh(),
+    repository.getContent({
+      page: to.meta.page,
+      search: new URL(to.fullPath, location.origin).search,
+      previous,
+    }),
+  ]).then(([, content]) => {
+    if (currentId === navigationId) navigation.content = content;
+  }).catch((error) => {
+    if (currentId === navigationId) {
+      navigation.error = error.message || "页面暂时无法加载，请重试。";
+      navigation.content = { ...navigation.content, loading: false };
+    }
+  }).finally(() => {
+    if (currentId === navigationId) navigation.pending = "";
+  });
 });
 router.onError((error) => {
   navigation.pending = "";

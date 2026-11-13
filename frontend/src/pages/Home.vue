@@ -60,7 +60,7 @@ const featuredCases = computed(() => props.state.cases.filter(c => c.remote).sli
       <CaseStatus :state="state" @retry="emit('retry')" />
       <div id="home-cases" class="stories-grid">
         <HomeCaseStudy v-for="(item, index) in featuredCases" :key="item.id" :item="item" :index="index" />
-        <p v-if="!featuredCases.length && !state.casesError" class="empty">暂无案例</p>
+        <p v-if="!featuredCases.length && !state.casesError && !state.loading" class="empty">暂无案例</p>
       </div>
     </section>
     <HomeResources :state="state" @retry="emit('retry')" />

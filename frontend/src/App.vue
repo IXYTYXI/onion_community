@@ -24,21 +24,21 @@ const state = ref({ cases: [], news: [], banner: null }),
   toast = ref("");
 let timer;
 watch(
-  () => route.meta.content,
+  () => navigation.content,
   (content) => {
     if (content) state.value = content;
   },
   { immediate: true },
 );
 async function retry() {
-  state.value = await repository.getContent({
+  navigation.content = await repository.getContent({
     page: route.meta.page,
     search: new URL(route.fullPath, location.origin).search,
+    previous: state.value,
   });
-  route.meta.content = state.value;
 }
 function saved(value) {
-  state.value = value;
+  navigation.content = value;
   toast.value = "已保存到本机浏览器。";
   clearTimeout(timer);
   timer = setTimeout(() => (toast.value = ""), 4000);
@@ -70,7 +70,7 @@ onUnmounted(() => {
 <template>
   <UApp>
     <AmbientBackground />
-    <template v-if="user && route.meta.content">
+    <template v-if="user && navigation.content">
       <SiteShell :page="activePage" :user="user">
         <div v-if="navigation.error" class="navigation-error wrap" role="alert">
           {{ navigation.error }}

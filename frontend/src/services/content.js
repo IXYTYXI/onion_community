@@ -35,8 +35,13 @@ function adapt(item) {
 async function getContent({
   page = document.body.dataset.page,
   search = location.search,
+  previous = null,
 } = {}) {
-  const state = load();
+  const local = load();
+  // Keep already visible sections while another route refreshes its own data.
+  const state = previous
+    ? { ...local, ...previous, loading: false }
+    : local;
   const params = new URLSearchParams(search);
   const needsCases =
     ["home", "cases", "skills"].includes(page) ||
@@ -47,6 +52,7 @@ async function getContent({
         state.banner = data.item;
         state.bannerStale = data.stale;
         state.bannerUpdatedAt = data.updated_at;
+        delete state.bannerError;
       }).catch(error => {
         state.bannerError = error.message || "Banner 暂时无法加载";
       })
@@ -58,17 +64,20 @@ async function getContent({
         state.news = data.items.map(item => ({ ...item, remote: true, body: item.summary }));
         state.newsStale = data.stale;
         state.newsUpdatedAt = data.updated_at;
+        delete state.newsError;
       }).catch(error => {
         state.newsError = error.message || "资讯暂时无法加载";
       })
     : Promise.resolve();
   const faqRequest = page === "home" ? auth.request("/api/v1/faq").then(data => {
     state.faq = data.items;
+    delete state.faqError;
   }).catch(error => { state.faqError = error.message || "常见问题暂时无法加载"; }) : Promise.resolve();
   const casesRequest = needsCases ? auth.request("/api/v1/cases").then(data => {
-    state.cases = [...data.items.map(adapt), ...state.cases];
+    state.cases = [...data.items.map(adapt), ...local.cases];
     state.casesStale = data.stale;
     state.casesUpdatedAt = data.updated_at;
+    delete state.casesError;
   }).catch(error => {
     state.casesError = error.message || "案例暂时无法加载";
   }) : Promise.resolve();

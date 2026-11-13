@@ -99,7 +99,7 @@ const tones = {
         </button>
       </div>
     </div>
-    <div v-else-if="!state.newsError" class="news-empty">暂无资讯</div>
+    <div v-else-if="!state.newsError && !state.loading" class="news-empty">暂无资讯</div>
     <NewsDialog ref="reader" />
   </section>
 </template>

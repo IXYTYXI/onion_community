@@ -68,6 +68,13 @@ export function useDeployment() {
     clearTimeout(timer);
     controller?.abort();
   }
+  function rememberJob(item) {
+    const index = history.value.findIndex((entry) => entry.id === item.id);
+    if (index === -1) history.value = [item, ...history.value];
+    else history.value = history.value.map((entry, position) =>
+      position === index ? item : entry,
+    );
+  }
   async function poll(id, version = pollVersion) {
     if (disposed || version !== pollVersion) return;
     controller = new AbortController();
@@ -79,6 +86,7 @@ export function useDeployment() {
       );
       if (disposed || version !== pollVersion) return;
       job.value = result;
+      rememberJob(result);
       if (!result.terminal) timer = setTimeout(() => poll(id, version), 5000);
       else {
         const rows = await auth.request("/api/v1/deployment/jobs", { signal });
@@ -95,6 +103,7 @@ export function useDeployment() {
   function viewJob(item) {
     stopPolling();
     job.value = item;
+    rememberJob(item);
     return poll(item.id);
   }
   if (getCurrentInstance()) {

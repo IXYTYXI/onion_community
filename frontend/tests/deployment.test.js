@@ -148,6 +148,25 @@ test("selecting a new task ignores late results from the previous task", async (
   }
 });
 
+test("a continued deployment appears in history before its first poll completes", async () => {
+  const { auth } = await import("../src/services/auth.js");
+  const previous = auth.request;
+  let resolvePoll;
+  auth.request = (path) => path.endsWith("/jobs/continued")
+    ? new Promise((resolve) => { resolvePoll = resolve; })
+    : Promise.resolve([{ id: "continued", terminal: true }, { id: "failed", terminal: true }]);
+  try {
+    const w = useDeployment();
+    w.history.value = [{ id: "failed", terminal: true }];
+    const pending = w.viewJob({ id: "continued", terminal: false });
+    assert.equal(w.history.value[0].id, "continued");
+    resolvePoll({ id: "continued", terminal: true });
+    await pending;
+  } finally {
+    auth.request = previous;
+  }
+});
+
 test("existing application options retain the latest task", () => {
   const w = useDeployment();
   w.history.value = [

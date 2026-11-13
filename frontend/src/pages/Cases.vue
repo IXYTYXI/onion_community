@@ -18,12 +18,11 @@ const { page, mine, category, query, number, categories, matches, visible } =
     <div class="page-title">
       <div>
         <PageHeading>案例库<span class="case-title-dot">.</span></PageHeading>
-        <span
-          >{{ matches.length }}
-          {{
-            mine ? "个本机分享" : page === "cases" ? "个案例" : "条资讯"
-          }}</span
-        >
+        <span v-if="state.loading && !matches.length" role="status">正在加载案例…</span>
+        <span v-else>
+          {{ matches.length }}
+          {{ mine ? "个本机分享" : page === "cases" ? "个案例" : "条资讯" }}
+        </span>
       </div>
       <AppLink
         class="quiet-link"
@@ -65,7 +64,7 @@ const { page, mine, category, query, number, categories, matches, visible } =
     <FilterResults :filter-key="`${category}:${query}:${number}:${mine}`">
       <div id="catalog-results" aria-live="polite">
         <CaseCard v-for="item in visible" :key="item.id" :item="item" />
-        <div v-if="!matches.length && !state.casesError" class="catalog-empty">
+        <div v-if="!matches.length && !state.casesError && !state.loading" class="catalog-empty">
           <h2>{{ mine ? "暂无本机分享" : "没有匹配的案例" }}</h2>
           <p>请更换关键词或分类。</p>
         </div>
