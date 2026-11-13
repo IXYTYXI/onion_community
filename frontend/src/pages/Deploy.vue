@@ -1,7 +1,9 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
 import PageBreadcrumb from "../components/PageBreadcrumb.vue";
 import DeploymentActivity from "../components/deployment/DeploymentActivity.vue";
+import DeploymentPreflightSecrets from "../components/deployment/DeploymentPreflightSecrets.vue";
 import PageHeading from "../components/PageHeading.vue";
 import { useDeployment } from "../composables/useDeployment.js";
 const {
@@ -20,10 +22,13 @@ const {
   options,
   viewJob,
   applications,
+  preflight,
+  secretValues,
 } = useDeployment();
-const steps = ["选择应用", "连接仓库", "项目名称", "确认部署"];
+const steps = ["选择应用", "连接仓库", "配置运行密钥", "项目名称", "确认部署"];
 const stepTitle = ref(null);
 const wizard = ref(null);
+const secretFields = ref(null);
 function revealStep() {
   stepTitle.value?.focus({ preventScroll: true });
   wizard.value?.scrollIntoView({
@@ -33,12 +38,30 @@ function revealStep() {
       : "smooth",
   });
 }
-const progress = computed(() => Math.round((step.value / 3) * 100));
+const progress = computed(() => Math.round((step.value / 4) * 100));
+const skippedSecrets = computed(() => !!preflight.value && !preflight.value.items.some((item) =>
+  item.state === "unavailable" || (item.state === "missing" && !item.managed)));
 const domainName = computed(() => form.name || "项目名称");
-function continueStep() {
-  if (step.value === 3) submit();
-  else next();
+async function continueStep() {
+  if (step.value === 4) return submit();
+  const prior = step.value;
+  await next();
+  if (prior === 2 && step.value === 2 && errors.value[2]) {
+    await nextTick();
+    secretFields.value?.focusFirstError();
+  }
 }
+function hasPendingSecretInput() {
+  return Object.values(secretValues).some((value) => value);
+}
+function beforeUnload(event) {
+  if (!hasPendingSecretInput()) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+onMounted(() => window.addEventListener("beforeunload", beforeUnload));
+onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
+onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写的密钥尚未提交，离开后需要重新填写。确定离开吗？"));
 </script>
 
 <template>
@@ -90,7 +113,7 @@ function continueStep() {
       <div class="wizard-progress-heading">
         <span>部署配置</span
         ><span
-          >步骤 <b>{{ step + 1 }}</b> / 4</span
+          >步骤 <b>{{ step + 1 }}</b> / 5</span
         >
       </div>
       <nav class="deploy-steps" aria-label="部署步骤">
@@ -107,19 +130,19 @@ function continueStep() {
         <ol>
           <li
             v-for="(label, index) in steps"
-            :key="label"
-            :class="{ current: step === index, complete: index < step }"
+              :key="label"
+              :class="{ current: step === index, complete: index < step, skipped: index === 2 && skippedSecrets }"
           >
             <button
               type="button"
-              :disabled="index > step"
+              :disabled="index > step || (index === 2 && skippedSecrets)"
               :aria-current="index === step ? 'step' : undefined"
               :aria-label="
                 (index < step ? '返回' : '') +
                 '第' +
                 (index + 1) +
                 '步：' +
-                label
+                (index === 2 && skippedSecrets ? '运行密钥无需配置，已跳过' : label)
               "
               @click="back(index)"
             >
@@ -128,7 +151,7 @@ function continueStep() {
                   String(index + 1).padStart(2, "0")
                 }}</span></span
               >
-              <span class="step-label">{{ label }}</span>
+              <span class="step-label">{{ index === 2 && skippedSecrets ? "无需配置密钥" : label }}</span>
             </button>
           </li>
         </ol>
@@ -145,7 +168,7 @@ function continueStep() {
             <div :key="step" class="step-content">
               <div class="step-kicker">
                 <span>{{ String(step + 1).padStart(2, "0") }}</span
-                ><span v-if="step < 3" class="required-chip">必填</span
+                ><span v-if="step < 4" class="required-chip">{{ step === 2 ? "按需填写" : "必填" }}</span
                 ><span v-else class="review-chip">最后一步</span>
               </div>
               <h2 ref="stepTitle" tabindex="-1">{{ steps[step] }}</h2>
@@ -217,6 +240,20 @@ function continueStep() {
                 </p>
               </template>
               <template v-else-if="step === 2">
+                <p class="step-description">根据仓库配置填写应用运行所需的密钥。已配置的值不会显示或覆盖。</p>
+                <DeploymentPreflightSecrets
+                  v-if="preflight"
+                  ref="secretFields"
+                  :items="preflight.items"
+                  :can-preconfigure="preflight.canPreconfigure"
+                  :values="secretValues"
+                  :attempted="touched[2]"
+                  :busy="busy"
+                  @input="(name, value) => secretValues[name] = value"
+                />
+                <p v-if="touched[2] && errors[2]" class="field-error" role="alert">{{ errors[2] }}</p>
+              </template>
+              <template v-else-if="step === 3">
                 <p class="step-description">给应用一个简短、好记的访问名称。</p>
                 <label for="deploy-name"
                   >项目名称 <span class="required-star">*</span></label
@@ -230,9 +267,9 @@ function continueStep() {
                     autocapitalize="none"
                     spellcheck="false"
                     placeholder="例如 demo"
-                    :aria-invalid="(touched[2] || !!form.name) && !!errors[2]"
+                    :aria-invalid="(touched[3] || !!form.name) && !!errors[3]"
                     aria-describedby="name-help name-error domain-preview"
-                    @blur="touched[2] = true"
+                    @blur="touched[3] = true"
                   /><span :class="{ invalid: form.name.length > 7 }"
                     >{{ form.name.length }} / 7</span
                   >
@@ -243,10 +280,10 @@ function continueStep() {
                   <code>awesome.yaml</code> 的 <code>subdomain</code> 一致。
                 </p>
                 <p id="name-error" class="field-error" role="alert">
-                  {{ touched[2] || form.name ? errors[2] : "" }}
+                  {{ touched[3] || form.name ? errors[3] : "" }}
                 </p>
                 <p
-                  v-if="nameFeedback && !errors[2]"
+                  v-if="nameFeedback && !errors[3]"
                   class="field-help"
                   role="status"
                 >
@@ -261,7 +298,7 @@ function continueStep() {
                   <div>
                     <span>访问地址</span>
                     <p>
-                      <strong :class="{ invalid: form.name && errors[2] }">{{
+                      <strong :class="{ invalid: form.name && errors[3] }">{{
                         domainName
                       }}</strong
                       ><span>.{{ options.baseDomain }}</span>
@@ -288,7 +325,11 @@ function continueStep() {
                   </div>
                   <div>
                     <dt>部署分支</dt>
-                    <dd><code>main</code></dd>
+                    <dd><code>main · {{ preflight?.commit?.slice(0, 8) }}</code></dd>
+                  </div>
+                  <div>
+                    <dt>运行密钥</dt>
+                    <dd>{{ preflight?.items.length ? `${preflight.items.length} 项声明，已检查` : "无需配置" }}</dd>
                   </div>
                   <div>
                     <dt>项目名称</dt>
@@ -325,13 +366,13 @@ function continueStep() {
               class="next-step"
               :disabled="
                 busy ||
-                (step === 3 &&
+                (step === 4 &&
                   (!options.executionEnabled || (job && !job.terminal)))
               "
             >
-              <Icon v-if="step === 3" name="rocket" />{{
-                busy ? "正在提交" : step === 3 ? "开始部署" : "下一步"
-              }}<TripleArrow v-if="step < 3" compact />
+              <Icon v-if="step === 4" name="rocket" />{{
+                busy ? (step === 1 ? "正在检查仓库…" : "正在提交…") : step === 4 ? "开始部署" : "下一步"
+              }}<TripleArrow v-if="step < 4" compact />
             </button>
           </div>
           <p v-if="!options.executionEnabled" class="deployment-notice">
@@ -363,7 +404,7 @@ function continueStep() {
           <dl>
             <div>
               <dt><Icon name="blocks" />应用类型</dt>
-              <dd>新应用</dd>
+              <dd>{{ form.application === "create" ? "新应用" : "更新已有应用" }}</dd>
             </div>
             <div>
               <dt><Icon name="git-branch" />部署分支</dt>
@@ -377,7 +418,7 @@ function continueStep() {
             </div>
           </dl>
           <span class="blueprint-footnote">{{
-            step === 3
+            step === 4
               ? (options.executionEnabled ? "配置已就绪 · 可以部署" : "配置已就绪 · 等待执行环境")
               : "配置进度 " + progress + "%"
           }}</span>
@@ -561,7 +602,7 @@ function continueStep() {
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
 }
 .deploy-steps li {
@@ -626,8 +667,8 @@ function continueStep() {
   position: absolute;
   height: 2px;
   background: #e2e9f2;
-  left: 12.5%;
-  right: 12.5%;
+  left: 10%;
+  right: 10%;
   top: 19px;
 }
 .step-track > span {

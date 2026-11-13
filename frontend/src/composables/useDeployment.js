@@ -1,4 +1,5 @@
 import { auth } from "../services/auth.js";
+import { checkedPreflight, secretInputError } from "../services/deployment-secrets.js";
 import {
   computed,
   reactive,
@@ -53,12 +54,18 @@ export function useDeployment() {
   const busy = ref(false);
   const job = ref(null);
   const history = ref([]);
+  const preflight = ref(null);
+  const secretValues = reactive(Object.create(null));
   const options = ref({
     executionEnabled: false,
     baseDomain: "awesome.guanghexinzhi.cn",
   });
   let timer,
     controller,
+    preflightController,
+    preflightVersion = 0,
+    inspectedInput = "",
+    inspectedApplication = "",
     pollVersion = 0,
     requestKey = "",
     requestPayload = "",
@@ -120,6 +127,8 @@ export function useDeployment() {
     onBeforeUnmount(() => {
       disposed = true;
       stopPolling();
+      preflightController?.abort();
+      for (const name of Object.keys(secretValues)) delete secretValues[name];
     });
   }
   const form = reactive({ application: "create", repository: "", name: "" });
@@ -189,7 +198,7 @@ export function useDeployment() {
       nameController?.abort();
     });
   }
-  const touched = reactive([false, false, false]);
+  const touched = reactive([false, false, false, false]);
   const notice = ref("");
   const errors = computed(() => [
     form.application === "create" ||
@@ -197,17 +206,70 @@ export function useDeployment() {
       ? ""
       : "请选择有效应用。",
     repositoryError(form.repository),
+    !preflight.value ? "请先检查仓库配置。" :
+      preflight.value.canPreconfigure
+        ? (preflight.value.items.find((item) => item.state === "unavailable")
+            ? "部分密钥需要管理员恢复。" :
+          preflight.value.items.filter((item) => item.state === "missing" && !item.managed)
+            .map((item) => [item.name, secretInputError(secretValues[item.name] || "")])
+            .filter(([, error]) => error)
+            .map(([name, error]) => `${name}：${error}`)[0] || "")
+        : "",
     projectNameError(form.name) ||
+      (preflight.value && form.name !== preflight.value.subdomain
+        ? "名称须与 awesome.yaml 的 app.subdomain 一致。" : "") ||
       (nameTaken.value ? "项目名称已存在，请更换名称或选择已有应用。" : ""),
   ]);
-  function next() {
-    if (step.value >= 3) return;
+  async function next() {
+    if (step.value >= 4 || busy.value) return;
     touched[step.value] = true;
-    if (!errors.value[step.value]) step.value++;
+    if (errors.value[step.value]) return;
+    if (step.value === 1) {
+      const version = ++preflightVersion;
+      preflightController?.abort();
+      preflightController = new AbortController();
+      const input = form.repository.trim();
+      const application = form.application;
+      busy.value = true;
+      notice.value = "正在读取仓库配置…";
+      try {
+        const result = checkedPreflight(await auth.request("/api/v1/deployment/preflight", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repository: input,
+            ...(application === "create" ? {} : { app_id: application }) }),
+          signal: preflightController.signal,
+        }));
+        if (disposed || version !== preflightVersion || input !== form.repository.trim()
+            || application !== form.application) return;
+        preflight.value = result;
+        inspectedInput = input;
+        inspectedApplication = application;
+        for (const name of Object.keys(secretValues)) delete secretValues[name];
+        form.name = result.subdomain;
+        const needsInput = result.items.some((item) => item.state === "unavailable" ||
+          (item.state === "missing" && !item.managed));
+        step.value = needsInput ? 2 : 3;
+        notice.value = result.items.length ? "" : "仓库无需配置密钥，已跳过该步骤。";
+      } catch (error) {
+        if (!disposed && version === preflightVersion && error.name !== "AbortError")
+          notice.value = error.message || "无法读取仓库配置，请重试。";
+      } finally {
+        if (!disposed && version === preflightVersion) busy.value = false;
+      }
+      return;
+    }
+    step.value++;
     notice.value = "";
   }
   function back(index = step.value - 1) {
+    if (index === 2 && preflight.value && !preflight.value.items.some((item) =>
+      item.state === "unavailable" || (item.state === "missing" && !item.managed))) index = 1;
     if (index >= 0 && index < step.value) {
+      if (busy.value && step.value === 1) {
+        preflightVersion++;
+        preflightController?.abort();
+        busy.value = false;
+      }
       step.value = index;
       notice.value = "";
     }
@@ -223,7 +285,7 @@ export function useDeployment() {
       notice.value = "该应用已有进行中的部署，请等待任务完成。";
       return;
     }
-    if (step.value !== 3) return;
+    if (step.value !== 4) return;
     touched.fill(true);
     const invalid = errors.value.findIndex(Boolean);
     if (invalid !== -1) {
@@ -234,9 +296,20 @@ export function useDeployment() {
       notice.value = "部署执行环境待配置，暂未发起部署。";
       return;
     }
+    if (!preflight.value || inspectedInput !== form.repository.trim() ||
+        inspectedApplication !== form.application) {
+      step.value = 1;
+      notice.value = "仓库或应用已变化，请重新检查配置。";
+      return;
+    }
+    const values = Object.fromEntries(preflight.value.items
+      .filter((item) => item.state === "missing" && !item.managed)
+      .map((item) => [item.name, secretValues[item.name]]));
     const payload = JSON.stringify({
       repository: form.repository.trim(),
       name: form.name,
+      commit: preflight.value.commit,
+      values,
       ...(form.application === "create" ? {} : { app_id: form.application }),
     });
     if (
@@ -258,6 +331,8 @@ export function useDeployment() {
         body: payload,
       });
       if (!disposed) viewJob(job.value);
+      for (const name of Object.keys(secretValues)) delete secretValues[name];
+      requestPayload = "";
     } catch (error) {
       notice.value = error.message;
     } finally {
@@ -277,6 +352,8 @@ export function useDeployment() {
     busy,
     job,
     history,
+    preflight,
+    secretValues,
     options,
     viewJob,
     applications,

@@ -35,6 +35,11 @@ class FakeRunner:
         self.calls.append((args, kwargs))
         if "rev-parse" in args:
             return subprocess.CompletedProcess(args, 0, (SHA + "\n").encode(), b"")
+        if "show" in args:
+            content = self.files.get("awesome.yaml")
+            if content is None:
+                return subprocess.CompletedProcess(args, 128, b"", b"not found")
+            return subprocess.CompletedProcess(args, 0, content if isinstance(content, bytes) else content.encode(), b"")
         if "ls-tree" in args:
             return subprocess.CompletedProcess(args, 0, self.tree, b"")
         if "archive" in args:
@@ -120,6 +125,44 @@ def test_prepare_retains_private_state_and_source_root_under_worker_umask(tmp_pa
 def test_source_module_available():
     from importlib.util import find_spec
     assert find_spec("awesome_deploy.source") is not None, "secure Git acquisition is required"
+
+
+def test_inspect_reads_bounded_manifest_without_exporting_source(tmp_path):
+    from awesome_deploy.source import GitSource
+
+    runner = FakeRunner()
+    result = GitSource(Settings(state_dir=tmp_path), runner=runner).inspect(
+        "https://github.com/example/demo", "main"
+    )
+    assert result["repository"] == "https://github.com/example/demo.git"
+    assert result["commit"] == SHA
+    assert result["manifest"]["app"]["subdomain"] == "demo"
+    assert not any("archive" in args for args, _ in runner.calls)
+    assert not list(tmp_path.iterdir())
+
+
+def test_inspect_rejects_missing_or_oversized_manifest(tmp_path):
+    from awesome_deploy.source import GitSource
+    from awesome_deploy.manifest import MAX_MANIFEST_BYTES
+
+    for files in ({}, {"awesome.yaml": b"x" * (MAX_MANIFEST_BYTES + 1)}):
+        with pytest.raises(DeployError) as error:
+            GitSource(Settings(state_dir=tmp_path), runner=FakeRunner(files)).inspect(
+                "https://github.com/example/demo", "main"
+            )
+        assert error.value.code == "INVALID_MANIFEST"
+
+
+def test_prepare_refuses_branch_change_after_preflight(tmp_path):
+    from awesome_deploy.source import GitSource
+
+    candidate = job()
+    candidate["input"]["expectedCommit"] = "b" * 40
+    checkpoints = []
+    with pytest.raises(DeployError) as error:
+        GitSource(Settings(state_dir=tmp_path), runner=FakeRunner()).prepare(candidate, checkpoints.append)
+    assert error.value.code == "PREFLIGHT_STALE"
+    assert checkpoints == []
 
 
 @pytest.mark.parametrize("url", [

@@ -56,5 +56,13 @@ class DeploymentSecretRequirements(BaseModel):
     items: list[DeploymentSecretItem]
 
 
+class DeploymentPreflight(BaseModel):
+    repository: str
+    commit: str
+    subdomain: str
+    canPreconfigure: bool
+    items: list[DeploymentSecretItem]
+
+
 class DeploymentSecretValues(InputModel):
     values: dict[str, str]

@@ -10,6 +10,7 @@ import signal
 import stat
 import subprocess
 import tarfile
+import tempfile
 import time
 from urllib.parse import urlsplit
 
@@ -188,10 +189,47 @@ class GitSource:
                 raise DeployError("UNSAFE_SOURCE", "Source state cannot traverse symbolic links.")
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
 
+    def inspect(self, repository: str, ref: str = "main", *, previous: dict | None = None) -> dict:
+        """Read only the root manifest from an allowlisted pinned Git commit."""
+        repository = validate_repository(repository, self.settings)
+        ref = validate_ref(ref)
+        with tempfile.TemporaryDirectory(prefix="ows-manifest-") as temporary:
+            git_dir = Path(temporary).resolve() / "repository.git"
+            self._git(["init", "--bare", "--template=", str(git_dir)], git_dir)
+            prefix = ["--git-dir", str(git_dir)]
+            self._git([*prefix, "fetch", "--no-tags", "--depth=1", "--no-recurse-submodules", repository, ref], git_dir)
+            raw = self._git([*prefix, "rev-parse", "--verify", "FETCH_HEAD^{commit}"], git_dir).stdout
+            try:
+                commit = raw.decode("ascii").strip()
+            except (UnicodeDecodeError, AttributeError) as exc:
+                raise DeployError("INVALID_SNAPSHOT", "Git returned an invalid commit hash.") from exc
+            if not _SHA.fullmatch(commit):
+                raise DeployError("INVALID_SNAPSHOT", "Git returned an invalid commit hash.")
+            entry = self._git([*prefix, "ls-tree", "-z", commit, "--", "awesome.yaml"], git_dir).stdout
+            if not entry.startswith((b"100644 blob ", b"100755 blob ")) or not entry.endswith(b"\tawesome.yaml\0") or entry.count(b"\0") != 1:
+                raise DeployError("INVALID_MANIFEST", "Repository root must contain a regular awesome.yaml file.",
+                                  "awesome.yaml", reason="MANIFEST_MISSING")
+            result = self._git([*prefix, "show", f"{commit}:awesome.yaml"], git_dir, check=False)
+            if result.returncode != 0:
+                raise DeployError("INVALID_MANIFEST", "Repository root must contain an awesome.yaml file.",
+                                  "awesome.yaml", reason="MANIFEST_MISSING")
+            if len(result.stdout) > MAX_MANIFEST_BYTES:
+                raise DeployError("INVALID_MANIFEST", "Manifest exceeds the 256 KiB size limit.",
+                                  "awesome.yaml", reason="MANIFEST_TOO_LARGE")
+            try:
+                manifest = load_manifest(result.stdout.decode("utf-8"), self.settings, previous=previous)
+            except UnicodeError as exc:
+                raise DeployError("INVALID_MANIFEST", "awesome.yaml must contain UTF-8 text.",
+                                  "awesome.yaml", reason="MANIFEST_ENCODING") from exc
+            return {"repository": repository, "commit": commit, "manifest": manifest}
+
     def prepare(self, job: dict, checkpoint) -> dict:
         inputs = job.get("input", job)
         repository = validate_repository(inputs["repository"], self.settings)
         ref = validate_ref(inputs["ref"])
+        expected_commit = inputs.get("expectedCommit")
+        if expected_commit is not None and (not isinstance(expected_commit, str) or not _SHA.fullmatch(expected_commit)):
+            raise DeployError("INVALID_SNAPSHOT", "Expected commit is not a full commit hash.")
         job_id = job["id"]
         if not isinstance(job_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", job_id):
             raise DeployError("INVALID_JOB", "Job identifier is not safe for source state.")
@@ -221,7 +259,12 @@ class GitSource:
                 raise DeployError("INVALID_SNAPSHOT", "Git returned an invalid commit hash.") from exc
             if not _SHA.fullmatch(commit):
                 raise DeployError("INVALID_SNAPSHOT", "Git returned an invalid commit hash.")
+            if expected_commit and commit != expected_commit:
+                raise DeployError("PREFLIGHT_STALE", "Repository main changed after configuration inspection.",
+                                  "repository", "Refresh the repository configuration and submit again.")
             checkpoint({"commit": commit})
+        if expected_commit and commit != expected_commit:
+            raise DeployError("PREFLIGHT_STALE", "Pinned commit does not match the inspected repository version.")
         # All work below follows durable pinning; retries can only fetch this exact commit.
         tree = self._git([*prefix, "ls-tree", "-r", "-z", commit], git_dir).stdout
         for entry in tree.split(b"\0"):

@@ -63,6 +63,150 @@ def test_no_executor_no_job(deploy):
     assert deploy.store.list_jobs() == []
 
 
+def test_enqueue_hook_rolls_back_new_app_and_job(deploy):
+    actor = deploy.actor(person(1))
+    payload = {"repository": "https://github.com/team/demo.git", "subdomain": "demo", "ref": "main"}
+
+    def reject(db, app_id, fresh_actor):
+        assert app_id and fresh_actor["id"] == actor["id"]
+        raise RuntimeError("synthetic failure")
+
+    with pytest.raises(RuntimeError, match="synthetic failure"):
+        deploy.store.enqueue(payload, "atomic-reject", actor=actor, on_app_ready=reject)
+    with deploy.store._connection() as db:
+        assert db.execute("SELECT count(*) FROM apps").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
+
+
+def test_preflight_reads_manifest_references_and_skips_empty_configuration(deploy, monkeypatch):
+    from awesome_deploy.source import GitSource
+
+    manifest = {"app": {"subdomain": "demo"}, "services": {
+        "web": {"secretRefs": {"MODEL_API_KEY": "PROVIDER_KEY", "MASTER_KEY": "DATA_MASTER"}},
+        "worker": {"secretRefs": {"BACKEND_KEY": "PROVIDER_KEY"}},
+    }}
+    monkeypatch.setattr(GitSource, "inspect", lambda self, repository, ref="main", **kwargs: {
+        "repository": "https://github.com/team/demo.git", "commit": "a" * 40,
+        "manifest": manifest,
+    })
+    result = deploy.preflight(person(1), "https://github.com/team/demo")
+    assert result["commit"] == "a" * 40
+    assert result["subdomain"] == "demo"
+    assert result["canPreconfigure"] is False
+    assert result["items"] == [
+        {"name": "DATA_MASTER", "uses": [{"service": "web", "environmentVariable": "MASTER_KEY"}],
+         "state": "missing", "managed": True},
+        {"name": "PROVIDER_KEY", "uses": [
+            {"service": "web", "environmentVariable": "MODEL_API_KEY"},
+            {"service": "worker", "environmentVariable": "BACKEND_KEY"}],
+         "state": "missing", "managed": False},
+    ]
+    manifest["services"] = {"web": {"secretRefs": {}}}
+    assert deploy.preflight(person(1), "https://github.com/team/demo")["items"] == []
+
+
+def test_submit_rechecks_preflight_commit_and_pins_new_job(deploy, monkeypatch):
+    from awesome_deploy.source import GitSource
+
+    manifest = {"app": {"subdomain": "demo"}, "services": {"web": {"secretRefs": {}}}}
+    monkeypatch.setattr(GitSource, "inspect", lambda self, repository, ref="main", **kwargs: {
+        "repository": "https://github.com/team/demo.git", "commit": "a" * 40,
+        "manifest": manifest,
+    })
+    deploy.settings.deploy_execution_enabled = True
+    monkeypatch.setattr(deploy, "executor_ready", lambda: True)
+    with pytest.raises(DeployError) as error:
+        deploy.submit(person(1), "https://github.com/team/demo", "demo", "preflight-stale",
+                      commit="b" * 40, values={})
+    assert error.value.code == "PREFLIGHT_STALE"
+    assert deploy.store.list_jobs() == []
+    accepted = deploy.submit(person(1), "https://github.com/team/demo", "demo", "preflight-good",
+                             commit="a" * 40, values={})
+    assert deploy.store.get(accepted["id"])["input"]["ref"] == "main"
+    assert deploy.store.get(accepted["id"])["input"]["expectedCommit"] == "a" * 40
+
+
+def test_legacy_backend_never_accepts_preflight_secret_values(deploy, monkeypatch):
+    from awesome_deploy.source import GitSource
+
+    monkeypatch.setattr(GitSource, "inspect", lambda self, repository, ref="main", **kwargs: {
+        "repository": "https://github.com/team/demo.git", "commit": "a" * 40,
+        "manifest": {"app": {"subdomain": "demo"}, "services": {
+            "web": {"secretRefs": {"MODEL_KEY": "API_KEY"}}}},
+    })
+    deploy.settings.deploy_execution_enabled = True
+    monkeypatch.setattr(deploy, "executor_ready", lambda: True)
+    with pytest.raises(DeployError) as error:
+        deploy.submit(person(1), "https://github.com/team/demo", "demo", "legacy-key",
+                      commit="a" * 40, values={"API_KEY": "fixture-only"})
+    assert error.value.code == "SECRET_PRECONFIGURATION_UNAVAILABLE"
+    assert deploy.store.list_jobs() == []
+
+
+def test_encrypted_preflight_secrets_and_job_commit_atomically(tmp_path, monkeypatch):
+    import base64
+    import os
+    import sqlite3
+    from awesome_deploy.config import Settings as EngineSettings
+    from awesome_deploy.source import GitSource
+    from awesome_deploy.vault_format import ensure_schema, set_format
+    from awesome_deploy.secret_vault import SecretVault
+
+    state = tmp_path / "state"
+    state.mkdir(mode=0o700)
+    key_dir = tmp_path / "credentials"
+    key_dir.mkdir(mode=0o700)
+    key = key_dir / "root.json"
+    key.write_text(json.dumps({"format": 1, "active": "k1", "keys": {
+        "k1": base64.b64encode(os.urandom(32)).decode()}}))
+    key.chmod(0o600)
+    engine = EngineSettings(state_dir=state, auth_mode="feishu",
+                            feishu_app_id="cli_aa04dd8797f8dbd1", feishu_tenant_key="tenant-test",
+                            secret_backend="encrypted", secret_kek_file=key)
+    with sqlite3.connect(engine.database_path, isolation_level=None) as db:
+        db.row_factory = sqlite3.Row
+        ensure_schema(db)
+        db.execute("BEGIN IMMEDIATE")
+        set_format(db, engine, phase="active", migration_id="test")
+        db.commit()
+    monkeypatch.setattr("app.deployment.service.load_settings", lambda _: engine)
+    settings = Settings(_env_file=None, news_sync_enabled=False, deploy_state_root=state,
+                        deploy_engine_config=tmp_path / "engine.json", deploy_execution_enabled=True,
+                        feishu_app_id="cli_aa04dd8797f8dbd1", deploy_tenant_id="tenant-test")
+    service = DeploymentService(settings)
+    monkeypatch.setattr(service, "executor_ready", lambda: True)
+    manifest = {"app": {"subdomain": "demo"}, "services": {"web": {
+        "secretRefs": {"MODEL_KEY": "API_KEY", "MASTER_KEY": "DATA_MASTER"}}}}
+    monkeypatch.setattr(GitSource, "inspect", lambda self, repository, ref="main", **kwargs: {
+        "repository": "https://github.com/team/demo.git", "commit": "a" * 40,
+        "manifest": manifest,
+    })
+    with pytest.raises(DeployError):
+        service.submit(person(1), "https://github.com/team/demo", "demo", "bad-values",
+                       commit="a" * 40, values={"UNDECLARED": "fixture-only"})
+    assert service.store.list_jobs() == []
+    with service.store._connection() as db:
+        assert db.execute("SELECT count(*) FROM apps").fetchone()[0] == 0
+    result = service.submit(person(1), "https://github.com/team/demo", "demo", "good-values",
+                            commit="a" * 40, values={"API_KEY": "fixture-only"})
+    again = service.submit(person(1), "https://github.com/team/demo", "demo", "good-values",
+                           commit="a" * 40, values={})
+    assert again["id"] == result["id"]
+    with service.store._connection() as db:
+        app_id = service.store.get(result["id"])["app_id"]
+        vault = SecretVault(service.engine)
+        assert {item["name"] for item in vault.metadata(db, app_id)} == {"API_KEY", "DATA_MASTER"}
+        assert b"fixture-only" not in engine.database_path.read_bytes()
+    service.store.fail(result["id"], {"code": "SYNTHETIC", "message": "test only"})
+    status = service.preflight(person(1), "https://github.com/team/demo", app_id)
+    assert {item["state"] for item in status["items"]} == {"configured"}
+    with pytest.raises(DeployError) as error:
+        service.submit(person(1), "https://github.com/team/demo", "demo", "cannot-overwrite", app_id,
+                       commit="a" * 40, values={"API_KEY": "replacement"})
+    assert error.value.code == "SECRET_ALREADY_CONFIGURED"
+    assert len(service.store.list_jobs()) == 1
+
+
 def test_transaction_rolls_back_sync_intent(deploy):
     job = queued(deploy)
     with deploy.store._connection() as db:
@@ -173,6 +317,29 @@ def test_api_auth_and_submission_contract(deploy):
             ).status_code
             == 403
         )
+
+
+def test_preflight_api_requires_login_and_returns_only_metadata(deploy, monkeypatch):
+    import asyncio
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+
+    app = create_app(deploy.settings, MemoryStore())
+    with TestClient(app) as client:
+        monkeypatch.setattr(app.state.deployment, "preflight", lambda user, repository, app_id=None: {
+            "repository": "https://github.com/team/demo.git", "commit": "a" * 40,
+            "subdomain": "demo", "canPreconfigure": True,
+            "items": [{"name": "API_KEY", "uses": [{"service": "web", "environmentVariable": "MODEL_KEY"}],
+                       "state": "missing", "managed": False}],
+        })
+        payload = {"repository": "https://github.com/team/demo"}
+        assert client.post("/api/v1/deployment/preflight", json=payload).status_code == 401
+        token = asyncio.run(app.state.auth.issue(person(1))).access_token
+        response = client.post("/api/v1/deployment/preflight", json=payload,
+                               headers={"Authorization": "Bearer " + token})
+        assert response.status_code == 200
+        assert response.json()["data"]["items"][0]["name"] == "API_KEY"
+        assert "value" not in response.text.lower()
 
 
 def test_community_secret_entry_is_scoped_and_never_returns_values(deploy):

@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse
 from app.api.dependencies import CurrentUser
 from app.schemas.common import Envelope, InputModel, success
 from app.schemas.deployment import (DeploymentJob, DeploymentOptions,
-    DeploymentSecretRequirements, DeploymentSecretValues)
+    DeploymentPreflight, DeploymentSecretRequirements, DeploymentSecretValues)
 
 router = APIRouter(prefix="/api/v1/deployment", tags=["一键部署"])
 
@@ -19,6 +19,13 @@ router = APIRouter(prefix="/api/v1/deployment", tags=["一键部署"])
 class Submit(InputModel):
     repository: str = Field(min_length=1, max_length=2048)
     name: str = Field(min_length=1, max_length=7)
+    app_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    commit: str | None = Field(default=None, pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+    values: dict[str, str] | None = None
+
+
+class Preflight(InputModel):
+    repository: str = Field(min_length=1, max_length=2048)
     app_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,64}$")
 
 
@@ -87,6 +94,12 @@ async def name_availability(
     return success(request, {"available": available})
 
 
+@router.post("/preflight", response_model=Envelope[DeploymentPreflight])
+async def preflight(body: Preflight, request: Request, user: CurrentUser):
+    result = await asyncio.to_thread(service(request).preflight, user, body.repository, body.app_id)
+    return success(request, result)
+
+
 @router.post("/jobs", status_code=202, response_model=Envelope[DeploymentJob])
 async def submit(
     body: Submit,
@@ -101,6 +114,8 @@ async def submit(
         body.name,
         idempotency_key,
         body.app_id,
+        commit=body.commit,
+        values=body.values,
     )
     return success(request, value)
 

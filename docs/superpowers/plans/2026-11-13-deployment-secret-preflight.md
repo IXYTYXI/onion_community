@@ -33,7 +33,7 @@
 
 **Files:** `frontend/src/pages/Deploy.vue`, `frontend/src/composables/useDeployment.js`, `frontend/src/services/deployment-secrets.js`, `frontend/tests/deployment.test.js`.
 
-- [ ] Write failing state tests for repository preflight, 5-stage navigation, no-reference state, masked missing inputs, stale-response handling, matching name, and final payload without browser storage.
+- [ ] Write failing state tests for repository preflight, 5-stage navigation, automatic secret-stage skip when no user input is required, masked missing inputs, stale-response handling, matching name, and final payload without browser storage.
 - [ ] Add the in-memory secret stage and explicit loading/empty/configured/missing/unavailable/error states; keep existing visual system and accessible labels/focus.
 - [ ] Bind review/submit to inspected commit, clear values after success or unmount, and warn before discarding typed values.
 - [ ] Run frontend tests and production build.

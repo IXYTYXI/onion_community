@@ -1,6 +1,25 @@
 const allowedItemKeys = new Set(["name", "uses", "state", "managed"]);
 const states = new Set(["missing", "configured", "unavailable"]);
 
+export function checkedPreflight(data) {
+  if (
+    !data ||
+    !/^https:\/\/[^\s]+$/.test(data.repository) ||
+    !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(data.commit) ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,5}[a-z0-9])?$/.test(data.subdomain) ||
+    typeof data.canPreconfigure !== "boolean" ||
+    !Array.isArray(data.items) ||
+    new Set(data.items.map((item) => item?.name)).size !== data.items.length ||
+    data.items.some((item) => !item ||
+      Object.keys(item).some((key) => !allowedItemKeys.has(key)) ||
+      !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(item.name) ||
+      !states.has(item.state) || typeof item.managed !== "boolean" ||
+      !Array.isArray(item.uses) || item.uses.some((use) =>
+        typeof use?.service !== "string" || typeof use?.environmentVariable !== "string"))
+  ) throw new Error("仓库配置返回的数据不完整，请重新检查。");
+  return data;
+}
+
 export function secretInputError(value) {
   if (typeof value !== "string" || !value) return "请输入密钥。";
   if (/[\r\n\0]/.test(value)) return "密钥不能包含换行或空字符。";

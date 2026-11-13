@@ -351,7 +351,8 @@ class Store:
     def before_enqueue(self, db, payload, actor):
         """Extension point for host constraints inside the submission transaction."""
 
-    def enqueue(self, payload, idempotency_key, *, actor=None, credential_id=None, delegated=False):
+    def enqueue(self, payload, idempotency_key, *, actor=None, credential_id=None, delegated=False,
+                on_app_ready=None):
         encoded = _json(payload)
         request_key = idempotency_key
         if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 200:
@@ -427,6 +428,10 @@ class Store:
                     AccessStore.claim_secret_scope(db, self.settings, actor, app_id,
                                                    payload["repository"], payload["subdomain"])
             self._check_offline_gate(db, app_id, payload.get("subdomain"))
+            if on_app_ready is not None:
+                if actor is None or credential_id is not None or delegated:
+                    raise denied()
+                on_app_ready(db, app_id, actor)
             job_id, now = uuid.uuid4().hex, time.time()
             db.execute(
                 """INSERT INTO jobs

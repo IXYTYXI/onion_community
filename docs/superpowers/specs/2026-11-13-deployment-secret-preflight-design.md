@@ -2,9 +2,9 @@
 
 ## User flow
 
-The wizard has five stages: choose application, connect repository, configure runtime secrets, confirm project name, and review. After the repository is entered, the server fetches `main` through the engine's allowlisted Git transport, pins the commit, validates the root `awesome.yaml`, and returns only `app.subdomain`, the commit, and unique `secretRefs` names with their service/environment uses. `env` literals are not requested. A manifest with no references shows a no-configuration state. The name stage is prefilled from `app.subdomain`, which the engine already requires to match the requested domain.
+The wizard has five stages: choose application, connect repository, configure runtime secrets, confirm project name, and review. After the repository is entered, the server fetches `main` through the engine's allowlisted Git transport, pins the commit, validates the root `awesome.yaml`, and returns only `app.subdomain`, the commit, and unique `secretRefs` names with their service/environment uses. `env` literals are not requested. A manifest with no references skips the secret stage and shows a brief no-configuration notice on the name stage. The name stage is prefilled from `app.subdomain`, which the engine already requires to match the requested domain.
 
-For an existing app, the server checks deploy access and returns only each reference's configured/missing/unavailable state. Existing values are never returned or overwritten. A `MASTER_KEY` reference is platform managed and has no text field. New values remain in component memory until final confirmation; leaving the wizard clears them. The review displays names and status only.
+For an existing app, the server checks deploy access and returns only each reference's configured/missing/unavailable state. Existing values are never returned or overwritten. A `MASTER_KEY` reference is platform managed and has no text field. If the manifest has no user-entered references, the wizard skips the secret stage and advances straight from repository to project name after a brief “无需配置密钥” status. New values remain in component memory until final confirmation; leaving the wizard clears them. The review displays names and status only.
 
 ## Submission and identity
 

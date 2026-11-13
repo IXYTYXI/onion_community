@@ -5,6 +5,15 @@ import {
   repositoryError,
   useDeployment,
 } from "../src/composables/useDeployment.js";
+import { checkedPreflight } from "../src/services/deployment-secrets.js";
+
+test("preflight metadata rejects a response containing secret values", () => {
+  assert.throws(() => checkedPreflight({
+    repository: "https://github.com/team/repo.git", commit: "a".repeat(40),
+    subdomain: "demo", canPreconfigure: true,
+    items: [{ name: "API_KEY", uses: [], state: "missing", managed: false, value: "must-not-return" }],
+  }), /不完整/);
+});
 
 test("deployment names enforce domain rules without silently correcting input", () => {
   for (const value of ["a", "0", "demo", "abc-123", "a--b", "1234567"])
@@ -46,10 +55,59 @@ test("repository syntax accepts GitHub and nested self-hosted GitLab repositorie
   ])
     assert.ok(repositoryError(value), value);
 });
-test("wizard cannot skip steps, blocks invalid fields and retains input on backtracking", () => {
+test("wizard inspects the repository and skips secrets when YAML declares none", async () => {
+  const { auth } = await import("../src/services/auth.js");
+  const previous = auth.request;
+  auth.request = async (path) => {
+    assert.equal(path, "/api/v1/deployment/preflight");
+    return { repository: "https://github.com/team/repo.git", commit: "a".repeat(40),
+      subdomain: "demo", canPreconfigure: true, items: [] };
+  };
+  try {
+    const w = useDeployment();
+    w.next();
+    w.form.repository = "https://github.com/team/repo";
+    await w.next();
+    assert.equal(w.step.value, 3);
+    assert.equal(w.form.name, "demo");
+    assert.deepEqual(w.preflight.value.items, []);
+  } finally {
+    auth.request = previous;
+  }
+});
+
+test("wizard blocks missing secrets before the project-name stage", async () => {
+  const { auth } = await import("../src/services/auth.js");
+  const previous = auth.request;
+  auth.request = async () => ({ repository: "https://github.com/team/repo.git",
+    commit: "a".repeat(40), subdomain: "demo", canPreconfigure: true,
+    items: [{ name: "API_KEY", uses: [{ service: "web", environmentVariable: "MODEL_KEY" }],
+      state: "missing", managed: false }] });
+  try {
+    const w = useDeployment();
+    w.next();
+    w.form.repository = "https://github.com/team/repo";
+    await w.next();
+    assert.equal(w.step.value, 2);
+    w.next();
+    assert.equal(w.step.value, 2);
+    w.secretValues.API_KEY = "fixture-value";
+    w.next();
+    assert.equal(w.step.value, 3);
+  } finally {
+    auth.request = previous;
+  }
+});
+
+test("wizard cannot skip steps, blocks invalid fields and retains input on backtracking", async () => {
+  const { auth } = await import("../src/services/auth.js");
+  const previous = auth.request;
+  auth.request = async () => ({ repository: "https://github.com/team/repo.git",
+    commit: "a".repeat(40), subdomain: "demo", canPreconfigure: true, items: [] });
+  try {
   const w = useDeployment();
   assert.equal(w.form.application, "create");
-  w.back(3);
+  w.back(4);
   w.submit();
   assert.equal(w.step.value, 0);
   assert.equal(w.notice.value, "");
@@ -59,14 +117,14 @@ test("wizard cannot skip steps, blocks invalid fields and retains input on backt
   assert.equal(w.step.value, 1);
   assert.equal(w.touched[1], true);
   w.form.repository = "https://github.com/team/repo";
-  w.next();
-  assert.equal(w.step.value, 2);
+  await w.next();
+  assert.equal(w.step.value, 3);
   w.form.name = "Bad";
   w.next();
-  assert.equal(w.step.value, 2);
+  assert.equal(w.step.value, 3);
   w.form.name = "demo";
   w.next();
-  assert.equal(w.step.value, 3);
+  assert.equal(w.step.value, 4);
   w.back(0);
   assert.equal(w.step.value, 0);
   assert.equal(w.form.name, "demo");
@@ -74,22 +132,33 @@ test("wizard cannot skip steps, blocks invalid fields and retains input on backt
   w.back(3);
   assert.equal(w.step.value, 0);
   w.next();
-  w.next();
+  await w.next();
   w.next();
   w.submit();
   assert.match(w.notice.value, /暂未发起部署/);
+  } finally {
+    auth.request = previous;
+  }
 });
-test("final preview revalidates all fields and never claims a real deployment", () => {
+test("final preview revalidates all fields and never claims a real deployment", async () => {
+  const { auth } = await import("../src/services/auth.js");
+  const previous = auth.request;
+  auth.request = async () => ({ repository: "https://github.com/team/repo.git",
+    commit: "a".repeat(40), subdomain: "demo", canPreconfigure: true, items: [] });
+  try {
   const w = useDeployment();
   w.form.repository = "https://github.com/team/repo";
   w.form.name = "demo";
   w.next();
-  w.next();
+  await w.next();
   w.next();
   w.form.repository = "";
-  w.submit();
+  await w.submit();
   assert.equal(w.step.value, 1);
   assert.equal(w.notice.value, "");
+  } finally {
+    auth.request = previous;
+  }
 });
 
 test("deployment submission uses API and reuses idempotency key after an uncertain response", async () => {
@@ -97,6 +166,9 @@ test("deployment submission uses API and reuses idempotency key after an uncerta
   const previous = auth.request;
   const calls = [];
   auth.request = async (path, options) => {
+    if (path === "/api/v1/deployment/preflight")
+      return { repository: "https://github.com/team/repo.git", commit: "a".repeat(40),
+        subdomain: "demo", canPreconfigure: true, items: [] };
     calls.push({ path, options });
     throw new Error("网络异常");
   };
@@ -106,7 +178,7 @@ test("deployment submission uses API and reuses idempotency key after an uncerta
     w.form.repository = "https://github.com/team/repo";
     w.form.name = "demo";
     w.next();
-    w.next();
+    await w.next();
     w.next();
     await w.submit();
     await w.submit();
@@ -118,6 +190,41 @@ test("deployment submission uses API and reuses idempotency key after an uncerta
     );
     assert.equal(w.busy.value, false);
     assert.equal(w.job.value, null);
+  } finally {
+    auth.request = previous;
+  }
+});
+
+test("final deployment request sends only declared missing values and inspected commit", async () => {
+  const { auth } = await import("../src/services/auth.js");
+  const previous = auth.request;
+  let request;
+  auth.request = async (path, options) => {
+    if (path === "/api/v1/deployment/preflight")
+      return { repository: "https://github.com/team/repo.git", commit: "a".repeat(40),
+        subdomain: "demo", canPreconfigure: true,
+        items: [{ name: "API_KEY", uses: [{ service: "web", environmentVariable: "MODEL_KEY" }],
+          state: "missing", managed: false },
+        { name: "DATA_MASTER", uses: [{ service: "web", environmentVariable: "MASTER_KEY" }],
+          state: "missing", managed: true }] };
+    request = { path, options };
+    throw new Error("synthetic connection loss");
+  };
+  try {
+    const w = useDeployment();
+    w.options.value.executionEnabled = true;
+    w.next();
+    w.form.repository = "https://github.com/team/repo";
+    await w.next();
+    w.secretValues.API_KEY = "fixture-only-value";
+    w.next();
+    w.next();
+    await w.submit();
+    assert.equal(request.path, "/api/v1/deployment/jobs");
+    const body = JSON.parse(request.options.body);
+    assert.equal(body.commit, "a".repeat(40));
+    assert.deepEqual(body.values, { API_KEY: "fixture-only-value" });
+    assert.equal(JSON.stringify(body).includes("DATA_MASTER"), false);
   } finally {
     auth.request = previous;
   }
