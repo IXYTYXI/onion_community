@@ -26,7 +26,7 @@ Vue 部署向导已接入 `/api/v1/deployment`，复用社区 Cookie/Bearer 身�
 
 ### 用户填写运行密钥
 
-部署页顶部“下载部署配置 Skill”提供飞书文档中的完整 `awesome-deploy-protocol-20261104-r3.zip` 安装包，SHA-256 为 `dd8b4895f94d8fb32b7f07e6c921cbac45beeb39c85901b241e886f7d45eaa7a`。当前 r3 包尚未重新发布以覆盖下述新版页面密钥填写流程；该流程以本节和现行页面为准。
+部署页顶部“下载部署配置 Skill”提供完整的 `awesome-deploy-protocol-20261117-r4.zip` 安装包，SHA-256 为 `9482745a95d4b7bc4525556dba0c5c3e9368377c18fbf7bd82d319e67d8a2a4e`。r4 已写入下述页面密钥填写流程；安装时保留整个 `awesome-deploy-protocol` 目录。
 
 仓库根目录的 `awesome.yaml` 可以在服务中声明 `secretRefs`，例如：
 

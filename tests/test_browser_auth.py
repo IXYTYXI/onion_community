@@ -107,7 +107,7 @@ def test_deployment_skill_download_is_authenticated_complete_zip(client):
     from io import BytesIO
     from zipfile import ZipFile
 
-    path = "/assets/awesome-deploy-protocol-20261104-r3.zip"
+    path = "/assets/awesome-deploy-protocol-20261117-r4.zip"
     assert client.get(path).status_code == 401
     assert client.post("/api/v1/auth/dev", headers={"X-Dev-Login-Key": DEV_KEY}).status_code == 200
     response = client.get(path)
@@ -117,6 +117,10 @@ def test_deployment_skill_download_is_authenticated_complete_zip(client):
     with ZipFile(BytesIO(response.content)) as archive:
         assert "awesome-deploy-protocol/SKILL.md" in archive.namelist()
         assert "awesome-deploy-protocol/assets/awesome-v2.schema.json" in archive.namelist()
+        assert "2026-11-17-r4" in archive.read("awesome-deploy-protocol/SKILL.md").decode()
+        guidance = archive.read("awesome-deploy-protocol/references/resources-and-delivery.md").decode()
+        assert "没有需要用户填写的引用时" in guidance
+        assert "SECRET_NOT_FOUND" in guidance
 
 
 def test_cookie_logout_requires_origin_and_csrf(client):

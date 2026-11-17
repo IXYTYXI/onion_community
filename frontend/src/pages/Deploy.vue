@@ -72,7 +72,7 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
         <PageHeading>一键部署<span class="deployment-dot">.</span></PageHeading>
         <p>从代码仓库，到你的应用。</p>
       </div>
-      <a class="deploy-skill-download" href="/assets/awesome-deploy-protocol-20261104-r3.zip" download="awesome-deploy-protocol-20261104-r3.zip" title="下载完整 Skill 安装包（r3）">
+      <a class="deploy-skill-download" href="/assets/awesome-deploy-protocol-20261117-r4.zip" download="awesome-deploy-protocol-20261117-r4.zip" title="下载完整 Skill 安装包（r4）">
         <Icon name="file-down" />下载部署配置 Skill
       </a>
     </header>
