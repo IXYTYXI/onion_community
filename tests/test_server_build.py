@@ -34,6 +34,14 @@ def test_preflight_accepts_shared_vite_entry_and_rejects_missing_assets(tmp_path
         site_origin="https://example.com", allowed_hosts=["example.com"],
     )
     check_server.check(settings)
+    poster = build / "assets/poster.png"
+    poster.write_bytes(b"poster")
+    poster.chmod(0)
+    try:
+        with pytest.raises(ValueError, match="前端静态资源不可读"):
+            check_server.check(settings)
+    finally:
+        poster.chmod(0o644)
     shared.unlink()
     with pytest.raises(ValueError, match="前端构建产物不完整"):
         check_server.check(settings)

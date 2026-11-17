@@ -63,6 +63,15 @@ def check(settings, *, executor=False):
         for entry in manifest.values():
             if not (build / entry["file"]).is_file():
                 raise ValueError("前端构建产物不完整")
+        for asset in (build / "assets").rglob("*"):
+            if asset.is_file():
+                try:
+                    with asset.open("rb") as source:
+                        source.read(1)
+                except OSError as exc:
+                    raise ValueError(
+                        f"前端静态资源不可读: {asset.relative_to(build)}"
+                    ) from exc
     with Redis.from_url(
         settings.redis_url.get_secret_value(),
         socket_timeout=3,
