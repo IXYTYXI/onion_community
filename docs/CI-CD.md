@@ -3,6 +3,7 @@
 `https://gitlab.yc345.tv/fengyang1/owsc.git` 是唯一写入入口。GitHub
 `IXYTYXI/onion_communiyt` 是只读镜像；不要直接向 GitHub `main` 提交。
 GitLab `main` 的流水线依次测试、打包、推送 GitHub、发布到生产服务器。
+发布前还会从 Runner 检查服务器和 GitHub 的 SSH 连接，并核对固定的主机公钥。
 GitHub 推送失败时，服务器发布不会开始；推送使用普通快进更新，不强推。
 镜像 SSH 连接走 GitHub 提供的 `ssh.github.com:443`，主机公钥固定在
 `deploy/ci/github_known_hosts`。

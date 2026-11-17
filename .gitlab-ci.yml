@@ -51,7 +51,6 @@ release_connectivity:
   needs: []
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "codex/dual-repo-ci" && $OWS_RELEASE_PROBE_HOST'
   before_script:
     - apk add --no-cache openssh-client
   script:
