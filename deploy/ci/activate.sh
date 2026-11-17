@@ -65,6 +65,9 @@ test -f "$source/frontend/dist/connect.html"
 "$root/.venv/bin/uv" sync --project "$source" --frozen --no-dev --no-editable \
   --python /usr/bin/python3
 find "$source" -type d -exec chmod 0755 {} +
+# uv creates pyvenv.cfg and installed modules under the root umask. The API
+# and Worker run as separate unprivileged users and must read these files.
+find "$source/.venv" -type f -exec chmod a+r {} +
 rsync -a --ignore-existing "$active_source/frontend/dist/assets/" \
   "$source/frontend/dist/assets/"
 
