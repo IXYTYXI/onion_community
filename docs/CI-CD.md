@@ -2,13 +2,17 @@
 
 `https://gitlab.yc345.tv/fengyang1/owsc.git` 是唯一写入入口。GitHub
 `IXYTYXI/onion_communiyt` 是只读镜像；不要直接向 GitHub `main` 提交。
-GitLab `main` 的流水线依次测试、推送 GitHub、打包、发布到生产服务器。
+GitLab `main` 的流水线依次测试、打包、推送 GitHub、发布到生产服务器。
 GitHub 推送失败时，服务器发布不会开始；推送使用普通快进更新，不强推。
+镜像 SSH 连接走 GitHub 提供的 `ssh.github.com:443`，主机公钥固定在
+`deploy/ci/github_known_hosts`。
 
 ## GitLab 项目变量
 
 下列变量均设为 **Protected**，只供受保护的 `main` 分支使用。私钥设为
-**File** 类型，不能加入 Git 仓库或服务器应用配置文件。
+**File** 类型。GitLab 的多行 SSH 私钥不能使用 Masked/Hidden 可见性，
+因此这两项要选 **Visible**；作业只读取文件路径，不把密钥内容写入日志。
+私钥不能加入 Git 仓库或服务器应用配置文件。
 
 | 变量 | 类型 | 用途 |
 | --- | --- | --- |

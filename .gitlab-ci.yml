@@ -1,7 +1,7 @@
 stages:
   - verify
-  - mirror
   - package
+  - mirror
   - deploy
 
 default:
@@ -23,22 +23,36 @@ frontend:
 backend:
   stage: verify
   image: python:3.12-slim
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .cache/pip/
+      - .cache/uv/
+    when: always
   needs:
     - job: frontend
       artifacts: true
   script:
-    - python -m pip install --no-cache-dir uv==0.11.19
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git xz-utils && rm -rf /var/lib/apt/lists/*
+    - case "$(dpkg --print-architecture)" in amd64) node_arch=x64 ;; arm64) node_arch=arm64 ;; *) echo "Unsupported Node architecture" >&2; exit 1 ;; esac
+    - curl --fail --silent --show-error --location "https://nodejs.org/dist/v24.13.0/node-v24.13.0-linux-${node_arch}.tar.xz" --output /tmp/node.tar.xz
+    - tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+    - node --version && npm --version && git --version
+    - python -m pip install uv==0.11.19
     - uv sync --frozen
     - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q
 
 mirror_github:
   stage: mirror
-  image: alpine:3.21
+  image: node:24-alpine
   interruptible: false
   needs:
-    - job: frontend
-      artifacts: false
-    - job: backend
+    - job: package_release
       artifacts: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -50,21 +64,17 @@ mirror_github:
     - install -m 0600 "$GITHUB_MIRROR_SSH_KEY" "$HOME/.ssh/id_ed25519"
     - install -m 0644 deploy/ci/github_known_hosts "$HOME/.ssh/known_hosts"
     - export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
-    - git push git@github.com:IXYTYXI/onion_communiyt.git "HEAD:refs/heads/main"
-    - test "$(git ls-remote git@github.com:IXYTYXI/onion_communiyt.git refs/heads/main | cut -f1)" = "$CI_COMMIT_SHA"
+    - git push ssh://git@ssh.github.com:443/IXYTYXI/onion_communiyt.git "HEAD:refs/heads/main"
+    - test "$(git ls-remote ssh://git@ssh.github.com:443/IXYTYXI/onion_communiyt.git refs/heads/main | cut -f1)" = "$CI_COMMIT_SHA"
 
 package_release:
   stage: package
-  image: alpine:3.21
+  image: node:24-alpine
   needs:
     - job: frontend
       artifacts: true
     - job: backend
       artifacts: false
-    - job: mirror_github
-      artifacts: false
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
     - apk add --no-cache git python3
   script:
@@ -79,7 +89,7 @@ package_release:
 
 deploy_production:
   stage: deploy
-  image: alpine:3.21
+  image: node:24-alpine
   interruptible: false
   resource_group: ows-community-production
   environment:
@@ -87,6 +97,8 @@ deploy_production:
   needs:
     - job: package_release
       artifacts: true
+    - job: mirror_github
+      artifacts: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:

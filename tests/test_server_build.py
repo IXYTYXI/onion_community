@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -36,12 +37,17 @@ def test_preflight_accepts_shared_vite_entry_and_rejects_missing_assets(tmp_path
     check_server.check(settings)
     poster = build / "assets/poster.png"
     poster.write_bytes(b"poster")
-    poster.chmod(0)
-    try:
+    original_open = Path.open
+
+    def deny_poster_open(path, *args, **kwargs):
+        if path == poster:
+            raise PermissionError("poster is unreadable")
+        return original_open(path, *args, **kwargs)
+
+    with monkeypatch.context() as inaccessible:
+        inaccessible.setattr(Path, "open", deny_poster_open)
         with pytest.raises(ValueError, match="前端静态资源不可读"):
             check_server.check(settings)
-    finally:
-        poster.chmod(0o644)
     shared.unlink()
     with pytest.raises(ValueError, match="前端构建产物不完整"):
         check_server.check(settings)

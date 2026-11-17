@@ -54,14 +54,18 @@ exclude=(
 rsync -a "${exclude[@]}" "$root/" "$previous/source/"
 
 activated=0
+venv_moved=0
 rollback() {
   status=$?
+  (( status != 0 )) || status=1
   trap - ERR INT TERM HUP
   if (( activated )); then
     systemctl stop ows-community.service ows-deployment.service || true
-    rm -rf "$root/.venv"
-    if [[ -d $previous/venv ]]; then mv "$previous/venv" "$root/.venv"; fi
-    rsync -a --delete "${exclude[@]}" "$previous/source/" "$root/"
+    if (( venv_moved )); then
+      rm -rf "$root/.venv"
+      mv "$previous/venv" "$root/.venv"
+      rsync -a --delete "${exclude[@]}" "$previous/source/" "$root/"
+    fi
     systemctl start ows-community.service ows-deployment.service || true
     echo "release-failed: restored prior code (exit $status)" >&2
   fi
@@ -74,11 +78,13 @@ activated=1
 systemctl stop ows-deployment.service
 systemctl stop ows-community.service
 mv "$root/.venv" "$previous/venv"
+venv_moved=1
 rsync -a --delete "${exclude[@]}" "$source/" "$root/"
 mv "$source/.venv" "$root/.venv"
 
 systemctl start ows-community.service
 systemctl start ows-deployment.service
+cd "$root"
 runuser -u ows-community -- env OWS_COMMUNITY_SETTINGS_FILE=/etc/ows-community/community.env \
   "$root/.venv/bin/python" -m scripts.check_server
 systemctl is-active --quiet ows-community.service
