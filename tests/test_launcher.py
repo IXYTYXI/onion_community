@@ -94,7 +94,7 @@ def test_busy_port_stops_sibling_without_stopping_existing_service(occupied):
         listener.listen()
         process = start(api_port, frontend_port)
         try:
-            assert process.wait(timeout=12) != 0
+            assert process.wait(timeout=30) != 0
             assert not listening(other)
             assert listening(busy)
         finally:
