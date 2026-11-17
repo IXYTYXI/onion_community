@@ -1,0 +1,103 @@
+stages:
+  - verify
+  - mirror
+  - package
+  - deploy
+
+default:
+  interruptible: true
+
+frontend:
+  stage: verify
+  image: node:24-alpine
+  script:
+    - cd frontend
+    - npm ci
+    - npm test
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 day
+
+backend:
+  stage: verify
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  needs:
+    - job: frontend
+      artifacts: true
+  script:
+    - uv sync --frozen
+    - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q
+
+mirror_github:
+  stage: mirror
+  image: alpine:3.21
+  interruptible: false
+  needs:
+    - job: frontend
+      artifacts: false
+    - job: backend
+      artifacts: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - apk add --no-cache git openssh-client
+  script:
+    - test -f "$GITHUB_MIRROR_SSH_KEY"
+    - install -d -m 0700 "$HOME/.ssh"
+    - install -m 0600 "$GITHUB_MIRROR_SSH_KEY" "$HOME/.ssh/id_ed25519"
+    - install -m 0644 deploy/ci/github_known_hosts "$HOME/.ssh/known_hosts"
+    - export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+    - git push git@github.com:IXYTYXI/onion_communiyt.git "HEAD:refs/heads/main"
+    - test "$(git ls-remote git@github.com:IXYTYXI/onion_communiyt.git refs/heads/main | cut -f1)" = "$CI_COMMIT_SHA"
+
+package_release:
+  stage: package
+  image: alpine:3.21
+  needs:
+    - job: frontend
+      artifacts: true
+    - job: backend
+      artifacts: false
+    - job: mirror_github
+      artifacts: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - apk add --no-cache git python3
+  script:
+    - python3 scripts/package_release.py create --root . --archive release.tar.gz --commit "$CI_COMMIT_SHA"
+    - sha256sum release.tar.gz | cut -d ' ' -f1 > release.sha256
+    - python3 scripts/package_release.py verify --archive release.tar.gz --digest "$(cat release.sha256)" --commit "$CI_COMMIT_SHA"
+  artifacts:
+    paths:
+      - release.tar.gz
+      - release.sha256
+    expire_in: 1 day
+
+deploy_production:
+  stage: deploy
+  image: alpine:3.21
+  interruptible: false
+  resource_group: ows-community-production
+  environment:
+    name: production
+  needs:
+    - job: package_release
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - apk add --no-cache git openssh-client
+  script:
+    - test -f "$OWS_DEPLOY_SSH_KEY"
+    - test -f "$OWS_DEPLOY_KNOWN_HOSTS"
+    - install -d -m 0700 "$HOME/.ssh"
+    - install -m 0600 "$OWS_DEPLOY_SSH_KEY" "$HOME/.ssh/id_ed25519"
+    - install -m 0644 "$OWS_DEPLOY_KNOWN_HOSTS" "$HOME/.ssh/known_hosts"
+    - export OWS_SSH="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+    - test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$CI_COMMIT_SHA"
+    - scp -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes release.tar.gz "ows-release@$OWS_DEPLOY_HOST:/var/spool/ows-community-release/$CI_COMMIT_SHA.tar.gz"
+    - $OWS_SSH "ows-release@$OWS_DEPLOY_HOST" "sudo /usr/local/libexec/ows-community/activate.sh $CI_COMMIT_SHA $(cat release.sha256)"
+    - $OWS_SSH "ows-release@$OWS_DEPLOY_HOST" "test \"\$(cat /opt/ows-community/.release-commit)\" = $CI_COMMIT_SHA"
