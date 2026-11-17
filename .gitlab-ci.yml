@@ -22,35 +22,35 @@ frontend:
 
 backend:
   stage: verify
-  image: python:3.12-slim
+  image: node:24-alpine3.23
   variables:
-    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
     UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
   cache:
     key:
+      prefix: alpine323
       files:
         - uv.lock
     paths:
-      - .cache/pip/
+      - .cache/npm/
       - .cache/uv/
     when: always
   needs:
     - job: frontend
       artifacts: true
   script:
-    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git xz-utils && rm -rf /var/lib/apt/lists/*
-    - case "$(dpkg --print-architecture)" in amd64) node_arch=x64 ;; arm64) node_arch=arm64 ;; *) echo "Unsupported Node architecture" >&2; exit 1 ;; esac
-    - curl --fail --silent --show-error --location "https://nodejs.org/dist/v24.13.0/node-v24.13.0-linux-${node_arch}.tar.xz" --output /tmp/node.tar.xz
-    - tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
-    - node --version && npm --version && git --version
-    - python -m pip install uv==0.11.19
-    - uv sync --frozen
+    - apk add --no-cache git python3 uv
+    - node --version && npm --version && python3 --version && uv --version && git --version
+    - npm ci --prefix frontend --prefer-offline
+    - uv sync --frozen --python /usr/bin/python3
     - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q
 
 mirror_github:
   stage: mirror
   image: node:24-alpine
   interruptible: false
+  variables:
+    GIT_DEPTH: "0"
   needs:
     - job: package_release
       artifacts: false
