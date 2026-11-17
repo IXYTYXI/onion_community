@@ -32,6 +32,11 @@ sudoers 只允许 `ows-release` 执行该固定脚本。服务仍读取
 `/etc/ows-community/*.env`，部署状态和 SQLite 仍在 `/var/lib/awesome-deploy/`，
 均不进入发布包，也不被同步到 GitHub。
 
+`deploy/ci/provision.sh` 将这些一次性配置写在脚本里。运行时把上述
+三个文件与专用部署公钥复制到服务器的临时目录，以 root 在该目录执行
+`provision.sh`；不要上传私钥。完成后检查 sudoers 语法、目录权限，
+并用专用密钥验证 `ows-release` 能登录。部署公钥更换时再次运行脚本。
+
 发布脚本校验 GitLab 构建包的 SHA-256 和提交号，先在独立目录构建新虚拟环境，
 再暂停 Worker 与 API、切换代码、检查服务和就绪接口；失败时恢复本次发布前
 的代码与虚拟环境。临时回滚文件在成功后删除。数据库的定期备份和恢复验证
