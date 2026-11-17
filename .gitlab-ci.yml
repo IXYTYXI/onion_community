@@ -45,6 +45,24 @@ backend:
     - uv sync --frozen --python /usr/bin/python3
     - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q
 
+release_connectivity:
+  stage: verify
+  image: alpine:3.23
+  needs: []
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "codex/dual-repo-ci" && $OWS_RELEASE_PROBE_HOST'
+  before_script:
+    - apk add --no-cache openssh-client
+  script:
+    - host="${OWS_DEPLOY_HOST:-$OWS_RELEASE_PROBE_HOST}"
+    - test -n "$host"
+    - ssh-keyscan -T 10 -p 22 "$host" > server-hostkeys
+    - grep -q 'ssh-ed25519' server-hostkeys
+    - if [ -n "${OWS_DEPLOY_KNOWN_HOSTS:-}" ]; then grep -Fx -f "$OWS_DEPLOY_KNOWN_HOSTS" server-hostkeys; fi
+    - ssh-keyscan -T 10 -p 443 ssh.github.com > github-hostkeys
+    - grep -Fx -f deploy/ci/github_known_hosts github-hostkeys
+
 mirror_github:
   stage: mirror
   image: node:24-alpine
@@ -53,6 +71,8 @@ mirror_github:
     GIT_DEPTH: "0"
   needs:
     - job: package_release
+      artifacts: false
+    - job: release_connectivity
       artifacts: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
