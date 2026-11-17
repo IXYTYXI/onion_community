@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     news_sync_state_root: Path = PROJECT_ROOT / "var/news-sync"
     media_max_bytes: int = Field(default=20971520, ge=1024, le=52428800)
     media_root: Path = PROJECT_ROOT / "var/media"
+    ows_release_webhook_token: SecretStr = SecretStr("")
 
     assistant_enabled: bool = False
     assistant_agent_id: str = "agent_4mdqh9jvd7kfnnn"

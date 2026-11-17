@@ -28,6 +28,7 @@ from app.services.officers import OfficerService
 from app.services.cases import CaseService, CASE_FIELDS
 from app.api.cases import router as cases_router
 from app.api.banner import router as banner_router
+from app.api.ows_release import router as ows_release_router
 from app.services.banner import BannerService, BANNER_FIELDS
 from app.core.config import Settings
 from app.core.errors import register_handlers
@@ -75,6 +76,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
             async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=3),
                                          limits=httpx.Limits(max_connections=20),
                                          follow_redirects=False) as client:
+                app.state.release_http = client
                 app.state.feishu = FeishuIdentityProvider(client, settings)
                 app.state.officers = OfficerService(selected, FeishuDirectorySource(client, settings, selected), settings)
                 app.state.cases = CaseService(selected, FeishuDirectorySource(client, settings, selected,
@@ -117,6 +119,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
     app.include_router(news_router)
     app.include_router(faq_router)
     app.include_router(banner_router)
+    app.include_router(ows_release_router)
     app.include_router(pages)
     app.add_middleware(RequestMiddleware, max_body_bytes=settings.max_body_bytes,
                        allowed_hosts=settings.allowed_hosts)

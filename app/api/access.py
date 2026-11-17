@@ -13,6 +13,7 @@ PUBLIC_ENDPOINTS = frozenset({
     ("GET", "/api/v1/auth/feishu/callback"),
     ("POST", "/api/v1/auth/dev"),  # Separate development key, disabled in production.
     ("POST", "/api/v1/auth/feishu"),  # Legacy endpoint always rejects unbound codes.
+    ("POST", "/api/v1/ows-release/webhook"),  # Separate bearer token checked by the handler.
 })
 
 

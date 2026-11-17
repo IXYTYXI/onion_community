@@ -23,6 +23,7 @@ export default defineConfig({
           "cases",
           "news",
           "skills",
+          "connect",
           "services",
           "deploy",
           "profile",

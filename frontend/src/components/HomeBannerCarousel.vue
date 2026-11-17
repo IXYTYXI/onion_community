@@ -13,20 +13,17 @@ const bannerImage = computed(() => imageFailed.value ? "" : imageUrl(currentBann
 const bannerLink = computed(() => safeUrl(currentBanner.value.url));
 const active = ref(0);
 const direction = ref("next");
-const connectNotice = ref(false);
 watch(() => currentBanner.value.image, () => (imageFailed.value = false));
 
 function show(index) {
   if (index === active.value) return;
   direction.value = index > active.value ? "next" : "previous";
   active.value = index;
-  connectNotice.value = false;
 }
 
 function move(delta) {
   direction.value = delta > 0 ? "next" : "previous";
   active.value = (active.value + delta + 2) % 2;
-  connectNotice.value = false;
 }
 </script>
 
@@ -65,7 +62,7 @@ function move(delta) {
           <section class="campaign-banner campaign-skill-banner" aria-labelledby="skill-banner-title">
             <h1 id="skill-banner-title" class="visually-hidden">让你的 AI 助手用上公司知识</h1>
             <img src="/assets/ows-skill-cli-poster.png" width="1200" height="675" alt="OWS Skill + CLI：让你的 AI 助手用上公司知识，查公司资料、获取原文引用，连接常用 AI 工具。使用本人飞书身份，按已有权限读取。" loading="lazy" />
-            <button type="button" class="skill-banner-link" aria-label="接入 OWS" @click="connectNotice = true"><span class="visually-hidden">接入 OWS</span></button>
+            <AppLink href="connect.html" class="skill-banner-link" aria-label="接入 OWS"><span class="visually-hidden">接入 OWS</span></AppLink>
           </section>
         </div>
       </Transition>
@@ -77,6 +74,5 @@ function move(delta) {
       </div>
       <button type="button" class="home-carousel-arrow home-carousel-arrow-next" aria-label="下一张海报" @click="move(1)"><Icon name="chevron-right" /></button>
     </div>
-    <p v-if="connectNotice" id="skill-connect-notice" class="home-carousel-notice" role="status">接入地址和安装说明即将提供。</p>
   </section>
 </template>

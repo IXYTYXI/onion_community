@@ -16,7 +16,7 @@ FRONTEND = PROJECT_ROOT / "frontend" / "dist"
 PUBLIC = {"login.html", "assets/ows-community-logo.png", "assets/icons/lucide.svg"}
 EXTENSIONS = {".html", ".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".woff", ".woff2"}
 SKILL_ARCHIVE = "assets/awesome-deploy-protocol-20261117-r4.zip"
-PAGE_NAMES = ("index", "cases", "news", "skills", "services", "profile", "detail", "officers", "deploy", "login")
+PAGE_NAMES = ("index", "cases", "news", "skills", "connect", "services", "profile", "detail", "officers", "deploy", "login")
 
 
 def public_assets() -> set[str]:

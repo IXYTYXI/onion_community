@@ -15,6 +15,7 @@ const links = [
   ["cases", "cases.html", "案例库"],
   ["news", "news.html", "AI 资讯"],
   ["skills", "https://onionhub.yc345.tv/", "SkillHub"],
+  ["connect", "connect.html", "接入 OWS"],
   ["officers", "officers.html", "AI 领航团"],
   ["services", "services.html", "常用服务"],
 ];
