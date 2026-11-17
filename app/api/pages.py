@@ -15,6 +15,7 @@ pages = APIRouter(include_in_schema=False)
 FRONTEND = PROJECT_ROOT / "frontend" / "dist"
 PUBLIC = {"login.html", "assets/ows-community-logo.png", "assets/icons/lucide.svg"}
 EXTENSIONS = {".html", ".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".woff", ".woff2"}
+SKILL_ARCHIVE = "assets/awesome-deploy-protocol-20261104-r3.zip"
 PAGE_NAMES = ("index", "cases", "news", "skills", "services", "profile", "detail", "officers", "deploy", "login")
 
 
@@ -43,7 +44,7 @@ async def frontend(request: Request):
     path = request.url.path.lstrip("/") or "index.html"
     target = (FRONTEND / path).resolve()
     if (not target.is_relative_to(FRONTEND) or any(p.startswith(".") for p in Path(path).parts)
-            or not target.is_file() or target.suffix not in EXTENSIONS):
+            or not target.is_file() or (target.suffix not in EXTENSIONS and path != SKILL_ARCHIVE)):
         raise AppError(ErrorCode.NOT_FOUND)
     if path not in public_assets():
         try:
@@ -55,7 +56,8 @@ async def frontend(request: Request):
                 dest = safe_next(request.url.path + ("?" + request.url.query if request.url.query else ""))
                 return RedirectResponse("/login.html?" + urlencode({"next": dest, "auto": "1"}), 303)
             raise
-    return FileResponse(target, headers={"Referrer-Policy": "no-referrer", "Cache-Control": "no-cache"})
+    return FileResponse(target, filename=target.name if path == SKILL_ARCHIVE else None,
+                        headers={"Referrer-Policy": "no-referrer", "Cache-Control": "no-cache"})
 
 
 for route_path in ["/", "/assets/{path:path}", *(f"/{name}.html" for name in PAGE_NAMES)]:

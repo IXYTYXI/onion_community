@@ -103,6 +103,22 @@ def test_unauthenticated_pages_assets_and_no_source_leaks(client):
         assert client.get(path).status_code==200
 
 
+def test_deployment_skill_download_is_authenticated_complete_zip(client):
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    path = "/assets/awesome-deploy-protocol-20261104-r3.zip"
+    assert client.get(path).status_code == 401
+    assert client.post("/api/v1/auth/dev", headers={"X-Dev-Login-Key": DEV_KEY}).status_code == 200
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/zip")
+    assert "attachment" in response.headers["content-disposition"]
+    with ZipFile(BytesIO(response.content)) as archive:
+        assert "awesome-deploy-protocol/SKILL.md" in archive.namelist()
+        assert "awesome-deploy-protocol/assets/awesome-v2.schema.json" in archive.namelist()
+
+
 def test_cookie_logout_requires_origin_and_csrf(client):
     assert client.post("/api/v1/auth/dev",headers={"X-Dev-Login-Key":DEV_KEY}).status_code==200
     session=client.get("/api/v1/auth/session").json()["data"]

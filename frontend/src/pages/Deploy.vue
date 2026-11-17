@@ -72,9 +72,9 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
         <PageHeading>一键部署<span class="deployment-dot">.</span></PageHeading>
         <p>从代码仓库，到你的应用。</p>
       </div>
-      <button type="button" class="deploy-skill-download" title="即将提供">
+      <a class="deploy-skill-download" href="/assets/awesome-deploy-protocol-20261104-r3.zip" download="awesome-deploy-protocol-20261104-r3.zip" title="下载完整 Skill 安装包（r3）">
         <Icon name="file-down" />下载部署配置 Skill
-      </button>
+      </a>
     </header>
 
     <section class="resource-card" aria-labelledby="resource-title">
@@ -456,10 +456,15 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
   font-size: 13px;
   box-shadow: 0 4px 12px #2e568a06;
   white-space: nowrap;
+  text-decoration: none;
 }
 .deploy-skill-download:hover {
   background: #fff;
   border-color: #9fbbe0;
+}
+.deploy-skill-download:focus-visible {
+  outline: 3px solid #2b72dc;
+  outline-offset: 3px;
 }
 .deploy-skill-download .ui-icon {
   width: 18px;
