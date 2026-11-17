@@ -22,11 +22,12 @@ frontend:
 
 backend:
   stage: verify
-  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  image: python:3.12-slim
   needs:
     - job: frontend
       artifacts: true
   script:
+    - python -m pip install --no-cache-dir uv==0.11.19
     - uv sync --frozen
     - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q
 
