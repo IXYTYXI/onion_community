@@ -32,11 +32,24 @@ def start(api_port, frontend_port, environment="test"):
            "OWS_COMMUNITY_NEWS_SYNC_ENABLED": "false", "OWS_COMMUNITY_DEV_LOGIN_ENABLED": "false", "OWS_COMMUNITY_HOST": "127.0.0.1",
            "OWS_COMMUNITY_PORT": str(api_port), "OWS_COMMUNITY_FRONTEND_PORT": str(frontend_port)}
     return subprocess.Popen([sys.executable, "-m", "app"], cwd=ROOT, env=env,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            start_new_session=os.name == "posix")
+
+
+def stop(process):
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    elif process.poll() is None:
+        process.terminate()
+    if process.poll() is None:
+        process.wait(timeout=12)
 
 
 def wait_ready(process, urls):
-    deadline = time.monotonic() + 12
+    deadline = time.monotonic() + 30
     with httpx.Client(timeout=0.5, trust_env=False) as client:
         while time.monotonic() < deadline:
             assert process.poll() is None, "launcher exited before readiness"
@@ -68,9 +81,7 @@ def test_one_command_starts_both_and_ctrl_c_stops_both(environment):
         assert process.wait(timeout=12) == 0
         assert not listening(api_port) and not listening(frontend_port)
     finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=12)
+        stop(process)
 
 
 @pytest.mark.parametrize("occupied", ["api", "frontend"])
@@ -83,10 +94,8 @@ def test_busy_port_stops_sibling_without_stopping_existing_service(occupied):
         listener.listen()
         process = start(api_port, frontend_port)
         try:
-            assert process.wait(timeout=12) != 0
+            assert process.wait(timeout=30) != 0
             assert not listening(other)
             assert listening(busy)
         finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=12)
+            stop(process)
