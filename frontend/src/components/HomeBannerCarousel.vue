@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import CommunityArtwork from "./CommunityArtwork.vue";
+import Icon from "./Icon.vue";
 import TripleArrow from "./TripleArrow.vue";
 import { defaultBanner } from "../services/defaults.js";
 import { imageUrl, safeUrl } from "../services/urls.js";
@@ -70,11 +71,11 @@ function move(delta) {
       </Transition>
     </div>
     <div class="home-carousel-controls" aria-label="海报切换">
-      <button type="button" class="home-carousel-arrow" aria-label="上一张海报" @click="move(-1)"><TripleArrow direction="left" compact /></button>
+      <button type="button" class="home-carousel-arrow home-carousel-arrow-previous" aria-label="上一张海报" @click="move(-1)"><Icon name="chevron-right" /></button>
       <div class="home-carousel-dots">
         <button v-for="index in 2" :key="index" type="button" class="home-carousel-dot" :class="{ active: active === index - 1 }" :aria-label="`显示第 ${index} 张海报`" :aria-current="active === index - 1 ? 'true' : undefined" @click="show(index - 1)"><span></span></button>
       </div>
-      <button type="button" class="home-carousel-arrow" aria-label="下一张海报" @click="move(1)"><TripleArrow compact /></button>
+      <button type="button" class="home-carousel-arrow home-carousel-arrow-next" aria-label="下一张海报" @click="move(1)"><Icon name="chevron-right" /></button>
     </div>
     <p v-if="connectNotice" id="skill-connect-notice" class="home-carousel-notice" role="status">接入地址和安装说明即将提供。</p>
   </section>
