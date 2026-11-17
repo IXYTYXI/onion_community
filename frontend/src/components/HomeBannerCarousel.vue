@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import CommunityArtwork from "./CommunityArtwork.vue";
 import Icon from "./Icon.vue";
 import TripleArrow from "./TripleArrow.vue";
@@ -13,22 +13,71 @@ const bannerImage = computed(() => imageFailed.value ? "" : imageUrl(currentBann
 const bannerLink = computed(() => safeUrl(currentBanner.value.url));
 const active = ref(0);
 const direction = ref("next");
+const pointerInside = ref(false);
+const focusInside = ref(false);
+const paused = ref(false);
+const userResumed = ref(false);
+let timer;
+let motionPreference;
 watch(() => currentBanner.value.image, () => (imageFailed.value = false));
+
+function scheduleNext() {
+  clearTimeout(timer);
+  if (document.hidden || paused.value || motionPreference?.matches || ((pointerInside.value || focusInside.value) && !userResumed.value)) return;
+  timer = setTimeout(() => {
+    move(1, false);
+    scheduleNext();
+  }, 6000);
+}
+
+function onFocusOut(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    focusInside.value = false;
+    if (!pointerInside.value) userResumed.value = false;
+    scheduleNext();
+  }
+}
+
+function onPointerLeave() {
+  pointerInside.value = false;
+  if (!focusInside.value) userResumed.value = false;
+  scheduleNext();
+}
+
+function toggleAutoplay() {
+  paused.value = !paused.value;
+  userResumed.value = !paused.value;
+  scheduleNext();
+}
+
+onMounted(() => {
+  motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+  document.addEventListener('visibilitychange', scheduleNext);
+  motionPreference.addEventListener('change', scheduleNext);
+  scheduleNext();
+});
+onUnmounted(() => {
+  clearTimeout(timer);
+  document.removeEventListener('visibilitychange', scheduleNext);
+  motionPreference?.removeEventListener('change', scheduleNext);
+});
 
 function show(index) {
   if (index === active.value) return;
   direction.value = index > active.value ? "next" : "previous";
   active.value = index;
+  scheduleNext();
 }
 
-function move(delta) {
+function move(delta, resetTimer = true) {
   direction.value = delta > 0 ? "next" : "previous";
   active.value = (active.value + delta + 2) % 2;
+  if (resetTimer) scheduleNext();
 }
 </script>
 
 <template>
-  <section class="home-carousel" aria-label="首页精选海报" aria-roledescription="轮播">
+  <section class="home-carousel" aria-label="首页精选海报" aria-roledescription="轮播" @pointerenter="pointerInside = true; scheduleNext()" @pointerleave="onPointerLeave" @focusin="focusInside = true; scheduleNext()" @focusout="onFocusOut">
     <div class="home-carousel-stage">
       <Transition :name="`home-slide-${direction}`">
         <div v-if="active === 0" key="community" class="home-carousel-slide" role="group" aria-roledescription="幻灯片" aria-label="第 1 张，共 2 张">
@@ -72,6 +121,7 @@ function move(delta) {
       <div class="home-carousel-dots">
         <button v-for="index in 2" :key="index" type="button" class="home-carousel-dot" :class="{ active: active === index - 1 }" :aria-label="`显示第 ${index} 张海报`" :aria-current="active === index - 1 ? 'true' : undefined" @click="show(index - 1)"><span></span></button>
       </div>
+      <button type="button" class="home-carousel-playback" :aria-label="paused ? '继续自动轮播' : '暂停自动轮播'" :aria-pressed="paused" @click="toggleAutoplay"><Icon :name="paused ? 'play' : 'pause'" /></button>
       <button type="button" class="home-carousel-arrow home-carousel-arrow-next" aria-label="下一张海报" @click="move(1)"><Icon name="chevron-right" /></button>
     </div>
   </section>

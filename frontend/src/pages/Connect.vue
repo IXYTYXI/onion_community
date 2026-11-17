@@ -4,6 +4,7 @@ import PageBreadcrumb from '../components/PageBreadcrumb.vue';
 import { auth } from '../services/auth.js';
 import { installPrompt, installUrl } from '../services/ows-connect.js';
 import { renderInstallMarkdown } from '../services/markdown.js';
+import { fetchAndCacheOwsFile, readCachedOwsFile } from '../services/ows-files.js';
 
 const release = ref(null);
 const loading = ref(true);
@@ -47,21 +48,23 @@ async function copyPrompt() {
   copyTimer = setTimeout(() => (copyStatus.value = ''), 5000);
 }
 
-async function fetchFile(filename) {
-  const response = await fetch(`/api/v1/ows-release/files/${filename}`, {
-    credentials: 'same-origin',
-    cache: 'no-store',
-  });
-  if (!response.ok) throw new Error('文件暂时无法读取');
-  return response.text();
-}
-
 async function loadFiles() {
   const requestId = ++filesLoadId;
   guideLoading.value = true;
+  const [cachedGuide, cachedManifest] = await Promise.all([
+    readCachedOwsFile('ows-install.md'),
+    readCachedOwsFile('ows-release.json'),
+  ]);
+  if (requestId !== filesLoadId) return;
+  if (cachedGuide) {
+    guideSource.value = cachedGuide;
+    guideHtml.value = renderInstallMarkdown(cachedGuide);
+    guideLoading.value = false;
+  }
+  if (cachedManifest) manifestSource.value = cachedManifest;
   const [guide, manifest] = await Promise.allSettled([
-    fetchFile('ows-install.md'),
-    fetchFile('ows-release.json'),
+    fetchAndCacheOwsFile('ows-install.md'),
+    fetchAndCacheOwsFile('ows-release.json'),
   ]);
   if (requestId !== filesLoadId) return;
   if (guide.status === 'fulfilled') {
@@ -193,7 +196,7 @@ onUnmounted(() => {
           <div>
             <span class="connect-badge">OWS Skill + CLI</span>
             <h2 id="connect-guide-title">接入说明</h2>
-            <p>进入页面时已加载说明与版本清单；需要时可分别保存原文件。</p>
+            <p>说明与版本清单已预加载到浏览器；只有点击下载按钮才会保存原文件。</p>
           </div>
           <button type="button" class="connect-guide-close" aria-label="关闭接入说明" @click="guideDialog.close()">×</button>
         </header>
