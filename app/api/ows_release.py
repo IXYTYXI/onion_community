@@ -6,14 +6,19 @@ import json
 import httpx
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, ValidationError
-from starlette.responses import StreamingResponse
+from starlette.responses import Response, StreamingResponse
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
 from app.schemas.common import success
 
 RELEASE_URL = "https://ai.lab.yc345.tv/files/d/ows-release.json"
+INSTALL_URL = "https://ai.lab.yc345.tv/files/d/ows-install.md"
 RELEASE_KEY = "ows:release:current"
+PUBLIC_FILES = {
+    "ows-install.md": (INSTALL_URL, "text/markdown; charset=utf-8"),
+    "ows-release.json": (RELEASE_URL, "application/json"),
+}
 router = APIRouter(prefix="/api/v1/ows-release", tags=["OWS 接入"])
 
 
@@ -69,6 +74,22 @@ async def current(request: Request):
     release = await saved_release(request)
     response = success(request, release)
     return response
+
+
+@router.get("/files/{filename}")
+async def published_file(filename: str, request: Request):
+    if filename not in PUBLIC_FILES:
+        raise AppError(ErrorCode.NOT_FOUND)
+    url, media_type = PUBLIC_FILES[filename]
+    try:
+        upstream = await request.app.state.release_http.get(
+            url, headers={"Cache-Control": "no-cache"},
+        )
+        if upstream.status_code != 200 or len(upstream.content) > 128_000:
+            raise AppError(ErrorCode.UPSTREAM_ERROR)
+    except httpx.HTTPError as exc:
+        raise AppError(ErrorCode.UPSTREAM_ERROR) from exc
+    return Response(upstream.content, media_type=media_type, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/webhook")

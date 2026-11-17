@@ -3,14 +3,22 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import PageBreadcrumb from '../components/PageBreadcrumb.vue';
 import { auth } from '../services/auth.js';
 import { installPrompt, installUrl } from '../services/ows-connect.js';
+import { renderInstallMarkdown } from '../services/markdown.js';
 
 const release = ref(null);
 const loading = ref(true);
 const error = ref('');
 const copyStatus = ref('');
+const guideDialog = ref(null);
+const guideHtml = ref('');
+const guideSource = ref('');
+const manifestSource = ref('');
+const guideLoading = ref(true);
+const guideError = ref('');
 const latest = computed(() => release.value?.release_notes?.[0]);
 let events;
 let copyTimer;
+let filesLoadId = 0;
 
 function dateLabel(date) {
   return date?.replaceAll('-', '.') || '';
@@ -39,16 +47,69 @@ async function copyPrompt() {
   copyTimer = setTimeout(() => (copyStatus.value = ''), 5000);
 }
 
+async function fetchFile(filename) {
+  const response = await fetch(`/api/v1/ows-release/files/${filename}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('文件暂时无法读取');
+  return response.text();
+}
+
+async function loadFiles() {
+  const requestId = ++filesLoadId;
+  guideLoading.value = true;
+  const [guide, manifest] = await Promise.allSettled([
+    fetchFile('ows-install.md'),
+    fetchFile('ows-release.json'),
+  ]);
+  if (requestId !== filesLoadId) return;
+  if (guide.status === 'fulfilled') {
+    guideSource.value = guide.value;
+    guideHtml.value = renderInstallMarkdown(guide.value);
+  }
+  if (manifest.status === 'fulfilled') manifestSource.value = manifest.value;
+  guideError.value = guide.status === 'rejected'
+    ? guideHtml.value
+      ? '最新接入说明暂时无法加载，当前显示上次加载的内容。请重试。'
+      : '接入说明暂时无法加载，请重试。'
+    : manifest.status === 'rejected'
+      ? '版本清单暂时无法加载，请重试。'
+      : '';
+  guideLoading.value = false;
+}
+
+function openGuide() {
+  guideDialog.value?.showModal();
+}
+
+function downloadFile(filename) {
+  const content = filename === 'ows-install.md' ? guideSource.value : manifestSource.value;
+  if (!content) return;
+  const type = filename.endsWith('.json') ? 'application/json' : 'text/markdown';
+  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 onMounted(() => {
   loadRelease();
+  loadFiles();
   events = new EventSource('/api/v1/ows-release/events', { withCredentials: true });
   events.addEventListener('release', (event) => {
     try {
-      if (JSON.parse(event.data).release_id !== release.value?.release_id) loadRelease();
-    } catch { loadRelease(); }
+      if (JSON.parse(event.data).release_id !== release.value?.release_id) {
+        loadRelease();
+        loadFiles();
+      }
+    } catch { loadRelease(); loadFiles(); }
   });
 });
 onUnmounted(() => {
+  filesLoadId++;
   events?.close();
   clearTimeout(copyTimer);
 });
@@ -70,7 +131,7 @@ onUnmounted(() => {
         <div class="connect-url" :title="installUrl">{{ installUrl }}</div>
         <div class="connect-actions">
           <button type="button" class="connect-copy" @click="copyPrompt">复制接入链接</button>
-          <a :href="installUrl" target="_blank" rel="noopener noreferrer">查看接入说明 ↗</a>
+          <button type="button" class="connect-guide-open" aria-haspopup="dialog" @click="openGuide">查看接入说明 ↗</button>
         </div>
         <p v-if="copyStatus" class="copy-feedback" role="status">{{ copyStatus }}</p>
       </div>
@@ -110,7 +171,7 @@ onUnmounted(() => {
         <div><h2 id="connect-changelog-title">更新日志</h2><p>看看每一版新增了什么、哪些地方更好用了。</p></div>
         <span>按版本倒序展示</span>
       </div>
-      <div class="connect-timeline">
+      <div class="connect-timeline" role="region" aria-labelledby="connect-changelog-title" tabindex="0">
         <p v-if="loading" role="status">正在读取更新日志…</p>
         <div v-else-if="release?.release_notes?.length">
           <article v-for="(note, index) in release.release_notes" :key="note.version" class="connect-note">
@@ -126,6 +187,27 @@ onUnmounted(() => {
         <div v-else class="connect-error" role="alert"><p>{{ error }}</p><button type="button" @click="loadRelease">重试</button></div>
       </div>
     </section>
+    <dialog ref="guideDialog" class="connect-guide-dialog" aria-labelledby="connect-guide-title">
+      <div class="connect-guide-shell">
+        <header class="connect-guide-header">
+          <div>
+            <span class="connect-badge">OWS Skill + CLI</span>
+            <h2 id="connect-guide-title">接入说明</h2>
+            <p>进入页面时已加载说明与版本清单；需要时可分别保存原文件。</p>
+          </div>
+          <button type="button" class="connect-guide-close" aria-label="关闭接入说明" @click="guideDialog.close()">×</button>
+        </header>
+        <div class="connect-guide-downloads" aria-label="下载原文件">
+          <button type="button" :disabled="!guideSource" @click="downloadFile('ows-install.md')">下载 ows-install.md</button>
+          <button type="button" :disabled="!manifestSource" @click="downloadFile('ows-release.json')">下载 ows-release.json</button>
+        </div>
+        <div class="connect-guide-body" tabindex="0" aria-label="接入说明正文">
+          <p v-if="guideLoading && !guideHtml" role="status">正在准备接入说明…</p>
+          <div v-else-if="guideHtml" class="connect-guide-markdown" v-html="guideHtml"></div>
+          <p v-if="guideError" class="connect-guide-error" role="alert">{{ guideError }} <button type="button" @click="loadFiles">重试</button></p>
+        </div>
+      </div>
+    </dialog>
   </main>
 </template>
 
@@ -141,8 +223,8 @@ onUnmounted(() => {
 .connect-card-main > p { color: #627995; line-height: 1.6; }
 .connect-url { margin: 22px 0 16px; padding: 14px 16px; border: 1px solid #d8e4f5; border-radius: 10px; background: #f6f9ff; color: #304867; font-size: 15px; overflow-wrap: anywhere; }
 .connect-actions { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.connect-actions a, .connect-current a { color: #1760d5; font-weight: 600; }
-.connect-actions a:hover, .connect-current a:hover { text-decoration: underline; }
+.connect-guide-open, .connect-current a { color: #1760d5; font-weight: 600; }
+.connect-guide-open:hover, .connect-current a:hover { text-decoration: underline; }
 .connect-copy { min-height: 47px; padding: 0 24px; border-radius: 10px; background: #1765e9; color: #fff; font-weight: 650; box-shadow: 0 5px 13px #1b63d529; }
 .connect-copy:hover { background: #0c51c5; color: #fff; }
 .copy-feedback { margin-top: 12px !important; color: #16734c !important; font-size: 14px; }
@@ -166,7 +248,8 @@ onUnmounted(() => {
 .connect-changelog { padding-top: 46px; scroll-margin-top: 105px; }
 .connect-changelog-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 25px; }
 .connect-changelog-heading > span { color: #7186a2; font-size: 13px; }
-.connect-timeline { background: #fff; border: 1px solid #dbe6f5; border-radius: 20px; padding: 33px 38px; }
+.connect-timeline { background: #fff; border: 1px solid #dbe6f5; border-radius: 20px; padding: 33px 38px; max-height: min(520px, 58vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.connect-timeline:focus-visible, .connect-guide-body:focus-visible { outline: 3px solid #2b6ee7; outline-offset: 3px; }
 .connect-note { position: relative; margin-left: 9px; padding: 0 0 30px 36px; border-left: 2px solid #dbe6f5; }
 .connect-note + .connect-note { padding-top: 30px; border-top: 1px solid #e8eef6; }
 .connect-note::before { content: ''; position: absolute; left: -8px; top: 7px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #c5d9fa; background: #1765e9; }
@@ -180,6 +263,34 @@ onUnmounted(() => {
 .connect-change-group ul { margin: 8px 0 0; padding-left: 23px; color: #385371; line-height: 1.8; }
 .connect-change-group li::marker { color: #1765e9; }
 .connect-end { text-align: center; color: #7186a2; font-size: 13px; }
+.connect-guide-dialog { width: min(900px, calc(100% - 40px)); max-height: 88dvh; padding: 0; border: 1px solid #dbe7f6; border-radius: 20px; color: #173665; box-shadow: 0 24px 80px #112f5b38; }
+.connect-guide-dialog::backdrop { background: #102e5a99; backdrop-filter: blur(5px); }
+.connect-guide-shell { display: grid; grid-template-rows: auto auto minmax(0, 1fr); max-height: 88dvh; }
+.connect-guide-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 25px 30px 19px; }
+.connect-guide-header h2 { font-size: 26px; margin-top: 10px; }
+.connect-guide-header p { margin-top: 8px; color: #647b9b; font-size: 14px; }
+.connect-guide-close { display: grid; place-items: center; flex: 0 0 42px; height: 42px; border-radius: 50%; background: #eaf2ff; color: #235cc4; font-size: 28px; line-height: 1; }
+.connect-guide-close:hover { background: #d8e8ff; }
+.connect-guide-downloads { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 30px 18px; border-bottom: 1px solid #e1eaf5; }
+.connect-guide-downloads button { min-height: 42px; padding: 9px 14px; border: 1px solid #cbdcf4; border-radius: 9px; color: #235cc4; font-weight: 600; }
+.connect-guide-downloads button:hover:not(:disabled) { background: #ebf3ff; }
+.connect-guide-downloads button:disabled { opacity: .5; cursor: not-allowed; }
+.connect-guide-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px 30px 34px; }
+.connect-guide-error { margin-top: 14px; color: #a43434; }
+.connect-guide-error button { text-decoration: underline; }
+.connect-guide-markdown { color: #344a67; line-height: 1.75; overflow-wrap: anywhere; }
+.connect-guide-markdown :deep(h1), .connect-guide-markdown :deep(h2), .connect-guide-markdown :deep(h3) { color: #173665; line-height: 1.35; text-wrap: balance; margin: 25px 0 12px; }
+.connect-guide-markdown :deep(h1:first-child) { margin-top: 0; }
+.connect-guide-markdown :deep(h1) { font-size: 25px; }
+.connect-guide-markdown :deep(h2) { font-size: 20px; }
+.connect-guide-markdown :deep(h3) { font-size: 17px; }
+.connect-guide-markdown :deep(p), .connect-guide-markdown :deep(ul), .connect-guide-markdown :deep(ol) { margin: 0 0 14px; }
+.connect-guide-markdown :deep(ul), .connect-guide-markdown :deep(ol) { padding-left: 25px; }
+.connect-guide-markdown :deep(li) { margin: 5px 0; }
+.connect-guide-markdown :deep(a) { color: #1760d5; text-decoration: underline; }
+.connect-guide-markdown :deep(pre) { margin: 14px 0 20px; padding: 16px; border-radius: 12px; background: #132c50; color: #f4f8ff; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+.connect-guide-markdown :deep(code) { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
+.connect-guide-markdown :deep(:not(pre) > code) { background: #edf3fb; padding: 2px 4px; border-radius: 4px; }
 @media (max-width: 850px) { .connect-card { grid-template-columns: 1fr; } .connect-current { border-left: 0; border-top: 1px solid #dce7f6; padding: 24px 0 0; } .connect-steps { grid-template-columns: 1fr; gap: 23px; } }
-@media (max-width: 600px) { .connect-page { padding-top: 24px; } .connect-card { padding: 24px 20px; } .connect-timeline { padding: 25px 18px; } .connect-intro h1 { font-size: 29px; } }
+@media (max-width: 600px) { .connect-page { padding-top: 24px; } .connect-card { padding: 24px 20px; } .connect-timeline { padding: 25px 18px; } .connect-intro h1 { font-size: 29px; } .connect-guide-header { padding: 20px; } .connect-guide-downloads { padding: 0 20px 16px; } .connect-guide-body { padding: 20px; } }
 </style>

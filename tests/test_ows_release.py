@@ -58,6 +58,21 @@ def test_invalid_release_does_not_replace_current_version(client, app, token):
     assert client.get("/api/v1/ows-release", headers=auth(token)).json()["data"]["cli_version"] == "0.1.2"
 
 
+def test_published_files_are_limited_to_the_two_fixed_sources(client, app, token):
+    body = b"# OWS install\n"
+    app.state.release_http.get = AsyncMock(side_effect=[httpx.Response(200, content=body),
+                                                          httpx.Response(200, content=b'{"version":"0.1.2"}')])
+    guide = client.get("/api/v1/ows-release/files/ows-install.md", headers=auth(token))
+    assert guide.status_code == 200
+    assert guide.content == body
+    assert guide.headers["Cache-Control"] == "no-store"
+    manifest = client.get("/api/v1/ows-release/files/ows-release.json", headers=auth(token))
+    assert manifest.status_code == 200
+    assert manifest.content == b'{"version":"0.1.2"}'
+    assert client.get("/api/v1/ows-release/files/other.md", headers=auth(token)).status_code == 404
+    assert app.state.release_http.get.await_count == 2
+
+
 def test_open_page_event_stream_receives_hook_updated_release(monkeypatch):
     async def scenario():
         store = MemoryStore()
