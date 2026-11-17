@@ -1,0 +1,27 @@
+[Unit]
+Description=OWS Community API on port @PORT@
+After=network-online.target ows-community-redis.service
+Wants=network-online.target
+Requires=ows-community-redis.service
+[Service]
+User=ows-community
+Group=ows-community
+WorkingDirectory=@SOURCE@
+Environment=OWS_COMMUNITY_SETTINGS_FILE=/etc/ows-community/community.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=@SOURCE@/.venv/bin/python -m scripts.check_server
+ExecStart=@SOURCE@/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port @PORT@ --no-access-log
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+MemoryMax=1G
+CPUQuota=150%
+TasksMax=128
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ows-community /var/lib/awesome-deploy
+UMask=0007
+[Install]
+WantedBy=multi-user.target
