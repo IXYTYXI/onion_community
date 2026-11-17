@@ -41,6 +41,10 @@ test -f "$root/.venv/bin/uv"
   --python /usr/bin/python3
 install -m 0755 "$root/.venv/bin/uv" "$source/.venv/bin/uv"
 
+# Extraction runs with umask 027. Make every directory traversable by the
+# unprivileged service account before rsync preserves those modes in $root.
+find "$source" -type d -exec chmod 0755 {} +
+
 # Old browser tabs can still request their hashed JS/CSS files after activation.
 if [[ -d $root/frontend/dist/assets ]]; then
   rsync -a --ignore-existing "$root/frontend/dist/assets/" "$source/frontend/dist/assets/"
