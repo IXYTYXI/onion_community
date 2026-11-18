@@ -10,13 +10,10 @@ default:
 frontend:
   stage: verify
   image: node:24-alpine
-  variables:
-    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
   cache:
     key: frontend-dist-v1
     paths:
       - frontend/dist/
-      - .cache/npm/
   script:
     - node scripts/ci_frontend.mjs
   artifacts:
@@ -39,7 +36,6 @@ backend:
         - pyproject.toml
         - uv.lock
   variables:
-    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
     UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
   cache:
     key:
@@ -47,7 +43,6 @@ backend:
       files:
         - uv.lock
     paths:
-      - .cache/npm/
       - .cache/uv/
     when: always
   script:
