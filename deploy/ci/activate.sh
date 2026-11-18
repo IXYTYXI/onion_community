@@ -7,6 +7,7 @@ root=/opt/ows-community
 inbox=/var/spool/ows-community-release
 validator=/usr/local/libexec/ows-community/package_release.py
 template=/usr/local/libexec/ows-community/ows-community-slot.service
+venv_reuse=/usr/local/libexec/ows-community/release_venv_reuse.py
 site=/etc/nginx/sites-available/ows-community-new
 worker_unit=/etc/systemd/system/ows-deployment.service
 domain=owscommunity.awesome.guanghexinzhi.cn
@@ -17,7 +18,7 @@ digest=${2:-}
 [[ $commit =~ ^[0-9a-f]{40}$ && $digest =~ ^[0-9a-f]{64}$ ]] || {
   echo 'invalid release identity' >&2; exit 2;
 }
-for path in "$validator" "$template" "$site" "$worker_unit" "$root/.venv/bin/uv"; do
+for path in "$validator" "$template" "$venv_reuse" "$site" "$worker_unit" "$root/.venv/bin/uv"; do
   test -f "$path"
 done
 
@@ -62,8 +63,14 @@ python3 "$validator" extract --archive "$archive" --digest "$digest" \
 source="$stage/source"
 test -f "$source/frontend/dist/.vite/manifest.json"
 test -f "$source/frontend/dist/connect.html"
-"$root/.venv/bin/uv" sync --project "$source" --frozen --no-dev --no-editable \
-  --python /usr/bin/python3
+if python3 "$venv_reuse" "$active_source" "$source"; then
+  ln -s "$(realpath "$active_source/.venv")" "$source/.venv"
+  echo 'release-dependencies: reused active virtualenv'
+else
+  "$root/.venv/bin/uv" sync --project "$source" --frozen --no-dev --no-editable \
+    --python /usr/bin/python3
+  echo 'release-dependencies: installed changed dependencies'
+fi
 find "$source" -type d -exec chmod 0755 {} +
 # uv creates pyvenv.cfg and installed modules under the root umask. The API
 # and Worker run as separate unprivileged users and must read these files.
