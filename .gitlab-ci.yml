@@ -24,6 +24,9 @@ frontend:
 backend:
   stage: verify
   image: nikolaik/python-nodejs@sha256:35a2f99a0e220ed230ecf8a90521d7c81369952653f33c1ad02e6f7519af439d
+  needs:
+    - job: frontend
+      artifacts: true
   rules:
     - changes:
         - .gitlab-ci.yml
