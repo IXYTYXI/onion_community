@@ -9,7 +9,7 @@ def release(root: Path) -> Path:
     (root / ".venv/bin").mkdir(parents=True)
     (root / ".venv/bin/python").symlink_to(sys.executable)
     (root / ".venv/pyvenv.cfg").write_text(
-        f"home = /usr/bin\nversion = {sys.version_info.major}.{sys.version_info.minor}.0\n"
+        f"home = /usr/bin\nversion_info = {sys.version_info.major}.{sys.version_info.minor}.0\n"
     )
     (root / "uv.lock").write_text("lock-v1")
     (root / "pyproject.toml").write_text("project-v1")

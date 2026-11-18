@@ -35,7 +35,7 @@ def can_reuse(previous: Path, candidate: Path) -> bool:
     if not (config.is_file() and python.is_file() and os.access(python, os.X_OK)):
         return False
     try:
-        version = re.search(r"(?m)^version\s*=\s*(\d+)\.(\d+)", config.read_text())
+        version = re.search(r"(?m)^version(?:_info)?\s*=\s*(\d+)\.(\d+)", config.read_text())
     except OSError:
         return False
     if version is None or tuple(map(int, version.groups())) != sys.version_info[:2]:
