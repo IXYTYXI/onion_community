@@ -10,11 +10,15 @@ default:
 frontend:
   stage: verify
   image: node:24-alpine
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
+  cache:
+    key: frontend-dist-v1
+    paths:
+      - frontend/dist/
+      - .cache/npm/
   script:
-    - cd frontend
-    - npm ci
-    - npm test
-    - npm run build
+    - node scripts/ci_frontend.mjs
   artifacts:
     paths:
       - frontend/dist/
@@ -23,6 +27,17 @@ frontend:
 backend:
   stage: verify
   image: nikolaik/python-nodejs@sha256:35a2f99a0e220ed230ecf8a90521d7c81369952653f33c1ad02e6f7519af439d
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - Dockerfile
+        - app/**/*
+        - packages/**/*
+        - scripts/**/*
+        - tests/**/*
+        - deploy/**/*
+        - pyproject.toml
+        - uv.lock
   variables:
     NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
     UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
@@ -35,14 +50,40 @@ backend:
       - .cache/npm/
       - .cache/uv/
     when: always
-  needs:
-    - job: frontend
-      artifacts: true
   script:
     - node --version && npm --version && python3 --version && uv --version && git --version
+    - uv sync --frozen --python /usr/local/bin/python3
+    - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q --ignore=tests/test_launcher.py
+
+launcher:
+  stage: verify
+  image: nikolaik/python-nodejs@sha256:35a2f99a0e220ed230ecf8a90521d7c81369952653f33c1ad02e6f7519af439d
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - app/__main__.py
+        - frontend/**/*
+        - packages/**/*
+        - scripts/serve_frontend.py
+        - tests/test_launcher.py
+        - pyproject.toml
+        - uv.lock
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  cache:
+    key:
+      prefix: python312-node24-launcher
+      files:
+        - uv.lock
+    paths:
+      - .cache/npm/
+      - .cache/uv/
+    when: always
+  script:
     - npm ci --prefix frontend --prefer-offline
     - uv sync --frozen --python /usr/local/bin/python3
-    - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q
+    - OWS_COMMUNITY_ENVIRONMENT=test OWS_COMMUNITY_NEWS_SYNC_ENABLED=false uv run --no-sync pytest -q tests/test_launcher.py
 
 mirror_github:
   stage: mirror
@@ -53,6 +94,15 @@ mirror_github:
   needs:
     - job: package_release
       artifacts: false
+      optional: true
+    - job: frontend
+      artifacts: false
+    - job: backend
+      artifacts: false
+      optional: true
+    - job: launcher
+      artifacts: false
+      optional: true
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
@@ -67,11 +117,29 @@ mirror_github:
 package_release:
   stage: package
   image: python:3.12-bookworm
+  rules:
+    - changes:
+        - app/**/*
+        - frontend/src/**/*
+        - frontend/public/**/*
+        - frontend/assets/**/*
+        - frontend/*.html
+        - frontend/package*.json
+        - frontend/vite.config.js
+        - packages/deploy-engine/src/**/*
+        - packages/deploy-engine/pyproject.toml
+        - scripts/*.py
+        - pyproject.toml
+        - uv.lock
   needs:
     - job: frontend
       artifacts: true
     - job: backend
       artifacts: false
+      optional: true
+    - job: launcher
+      artifacts: false
+      optional: true
   script:
     - python3 scripts/package_release.py create --root . --archive release.tar.gz --commit "$CI_COMMIT_SHA"
     - sha256sum release.tar.gz | cut -d ' ' -f1 > release.sha256
@@ -96,6 +164,19 @@ deploy_production:
       artifacts: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - app/**/*
+        - frontend/src/**/*
+        - frontend/public/**/*
+        - frontend/assets/**/*
+        - frontend/*.html
+        - frontend/package*.json
+        - frontend/vite.config.js
+        - packages/deploy-engine/src/**/*
+        - packages/deploy-engine/pyproject.toml
+        - scripts/*.py
+        - pyproject.toml
+        - uv.lock
   script:
     - test -f "$OWS_DEPLOY_SSH_KEY"
     - test -f "$OWS_DEPLOY_KNOWN_HOSTS"
