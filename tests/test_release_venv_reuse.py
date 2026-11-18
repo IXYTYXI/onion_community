@@ -25,6 +25,15 @@ def test_reuses_environment_for_application_code_only(tmp_path: Path) -> None:
     assert can_reuse(previous, candidate)
 
 
+def test_ignores_generated_package_build_files(tmp_path: Path) -> None:
+    previous = release(tmp_path / "previous")
+    candidate = release(tmp_path / "candidate")
+    build = previous / "packages/deploy-engine/build/lib"
+    build.mkdir(parents=True)
+    (build / "engine.py").write_text("generated copy")
+    assert can_reuse(previous, candidate)
+
+
 def test_rebuilds_environment_when_lock_changes(tmp_path: Path) -> None:
     previous = release(tmp_path / "previous")
     candidate = release(tmp_path / "candidate")

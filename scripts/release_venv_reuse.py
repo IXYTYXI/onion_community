@@ -21,6 +21,9 @@ def _files(root: Path) -> dict[str, bytes] | None:
     if not package.is_dir() or package.is_symlink():
         return None
     for path in package.rglob("*"):
+        relative_parts = path.relative_to(package).parts
+        if relative_parts[0] == "build" or "__pycache__" in relative_parts:
+            continue
         if path.is_symlink():
             return None
         if path.is_file():
