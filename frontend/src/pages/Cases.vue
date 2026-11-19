@@ -40,29 +40,75 @@ const {
         >
       </div>
     </div>
-    <nav class="case-collections" aria-label="案例集合">
-      <AppLink
-        href="cases.html"
-        :aria-current="collection === 'all' ? 'page' : undefined"
-        >全部案例</AppLink
-      >
-      <AppLink
-        href="cases.html?mine=1"
-        :aria-current="mine ? 'page' : undefined"
-        >我的分享</AppLink
-      >
-      <template v-for="(action, key) in actions" :key="key">
-        <AppLink
-          v-if="engagement.state.switches[action.bit] === '1'"
-          :href="'cases.html?collection=' + key"
-          :aria-current="collection === key ? 'page' : undefined"
-        >
-          <Icon :name="action.icon" />{{ action.collection }}
-        </AppLink>
-      </template>
-    </nav>
-    <div class="catalog-tools">
-      <div class="nuxt-filters" aria-label="案例标签筛选">
+    <section class="case-toolbar" aria-label="案例筛选与排序">
+      <div class="toolbar-row">
+        <nav class="case-collections" aria-label="案例集合">
+          <AppLink
+            href="cases.html"
+            :aria-current="collection === 'all' ? 'page' : undefined"
+            >全部案例</AppLink
+          >
+          <AppLink
+            href="cases.html?mine=1"
+            :aria-current="mine ? 'page' : undefined"
+            >我的分享</AppLink
+          >
+          <template v-for="(action, key) in actions" :key="key">
+            <AppLink
+              v-if="engagement.state.switches[action.bit] === '1'"
+              :href="'cases.html?collection=' + key"
+              :aria-current="collection === key ? 'page' : undefined"
+            >
+              <Icon :name="action.icon" />{{ action.collection }}
+            </AppLink>
+          </template>
+        </nav>
+        <div class="catalog-controls">
+          <UInput
+            class="case-search"
+            id="search"
+            v-model="query"
+            name="q"
+            autocomplete="off"
+            @update:model-value="number = 1"
+            type="search"
+            size="lg"
+            aria-label="搜索实践案例"
+            placeholder="搜索案例…"
+          >
+            <template #leading><Icon name="search" /></template>
+          </UInput>
+          <div
+            v-if="!mine"
+            class="sort-options"
+            role="group"
+            aria-label="案例排序"
+          >
+            <button
+              type="button"
+              :aria-pressed="sort === 'default'"
+              @click="
+                sort = 'default';
+                number = 1;
+              "
+            >
+              {{ personal ? "最近" + actions[collection].label : "默认排序" }}
+            </button>
+            <button
+              type="button"
+              :aria-pressed="sort === 'likes'"
+              :disabled="engagement.state.status !== 'ready'"
+              @click="
+                sort = 'likes';
+                number = 1;
+              "
+            >
+              最多点赞
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="case-tags" role="group" aria-label="案例标签筛选">
         <UButton
           v-for="value in categories"
           :key="value"
@@ -79,43 +125,7 @@ const {
           {{ value }}
         </UButton>
       </div>
-      <div class="catalog-controls">
-        <UInput
-          class="catalog-search"
-          id="search"
-          v-model="query"
-          name="q"
-          autocomplete="off"
-          @update:model-value="number = 1"
-          type="search"
-          size="lg"
-          aria-label="搜索实践案例"
-          placeholder="搜索案例…"
-        >
-          <template #leading><Icon name="search" /></template>
-        </UInput>
-        <label v-if="!mine" class="catalog-sort">
-          <span class="sr-only">案例排序</span>
-          <select v-model="sort" @change="number = 1">
-            <option value="default">
-              {{
-                personal &&
-                engagement.state.switches[actions[collection].bit] === "1"
-                  ? "最近" + actions[collection].label
-                  : "默认排序"
-              }}
-            </option>
-            <option
-              value="likes"
-              :disabled="engagement.state.status !== 'ready'"
-            >
-              最多点赞
-            </option>
-          </select>
-          <TripleArrow compact direction="down" aria-hidden="true" />
-        </label>
-      </div>
-    </div>
+    </section>
     <CaseStatus v-if="!mine" :state="state" @retry="emit('retry')" />
     <div id="catalog-results" data-case-list tabindex="-1">
       <CaseCard v-for="item in visible" :key="item.id" :item="item" />
@@ -145,96 +155,123 @@ const {
   </main>
 </template>
 <style scoped>
-.case-collections {
+.case-toolbar {
+  margin-bottom: 20px;
+  border: 1px solid #d7e2ee;
+  border-radius: 16px;
+  background: #f9fcfff2;
+}
+.toolbar-row,
+.catalog-controls,
+.case-collections,
+.case-tags,
+.sort-options {
   display: flex;
+  align-items: center;
+}
+.toolbar-row {
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin: 0 0 20px;
-  border-bottom: 1px solid var(--line);
+  gap: 10px 20px;
+  padding: 12px 18px;
+}
+.case-collections,
+.case-tags {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.case-collections {
+  margin: 0;
+  order: 0;
+  width: auto;
+  justify-content: flex-start;
 }
 .case-collections a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  position: relative;
-  padding: 10px 4px 12px;
-  min-height: 44px;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #53647a;
   font-size: 14px;
-  color: #50657b;
-}
-.case-collections a[aria-current="page"] {
-  color: #1a549e;
-  font-weight: 650;
-}
-.case-collections a[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  inset-inline: 0;
-  height: 3px;
-  background: #346fc0;
-  border-radius: 3px;
-}
-.case-collections a:hover {
-  color: #164d97;
 }
 .case-collections .ui-icon {
   width: 15px;
   height: 15px;
 }
+.case-collections a[aria-current="page"] {
+  background: #e6effe;
+  color: #164c9b;
+  font-weight: 650;
+}
 .catalog-controls {
-  margin-left: auto;
-  display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
-  min-width: 0;
 }
-.catalog-controls .catalog-search {
-  min-width: 0;
-  width: min(230px, 100%);
+.case-search {
+  width: clamp(165px, 16vw, 230px);
 }
-.catalog-sort {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  color: #344e6b;
+.sort-options {
+  padding: 3px;
+  border: 1px solid #d5dfec;
+  border-radius: 9px;
+  background: #edf2f8;
 }
-.catalog-sort select {
-  appearance: none;
-  border: 1px solid #d1dce9;
-  border-radius: 8px;
-  padding: 8px 29px 8px 11px;
-  background-color: #fff;
-  color: #344e6b;
-  min-height: 38px;
-  font-size: 13px;
+.sort-options button {
+  min-height: 29px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #52647b;
+  white-space: nowrap;
   cursor: pointer;
 }
-.catalog-sort .triple-arrow {
-  position: absolute;
-  right: 7px;
-  pointer-events: none;
+.sort-options button[aria-pressed="true"] {
+  color: #223c5d;
+  background: white;
+  box-shadow: 0 1px 3px #22385024;
+  font-weight: 600;
 }
-.catalog-sort select:hover {
-  border-color: #799dce;
+.sort-options button:disabled {
+  opacity: 0.54;
+  cursor: default;
 }
-.catalog-sort select:focus-visible,
-.case-collections a:focus-visible {
-  outline: 3px solid #3177ce;
+.case-tags {
+  border-top: 1px solid #e2e9f2;
+  padding: 10px 18px;
+  gap: 4px 6px;
+}
+.case-tags button {
+  border-radius: 7px;
+  color: #4a607b;
+}
+.case-tags button.selected {
+  background: #e3edfc;
+  color: #184e9b;
+}
+.case-toolbar :is(a, button):focus-visible {
+  outline: 2px solid #306ed0;
   outline-offset: 2px;
 }
-@media (max-width: 680px) {
+@media (hover: hover) {
+  .case-collections a:hover,
+  .sort-options button:hover:enabled {
+    color: #164c9b;
+    background: #e4edfa;
+  }
+}
+@media (max-width: 700px) {
+  .toolbar-row,
+  .case-tags {
+    padding: 10px;
+  }
   .catalog-controls {
     width: 100%;
   }
-  .catalog-controls .catalog-search {
-    flex: 1;
-    width: auto;
-    margin: 0;
-  }
-  .catalog-sort select {
-    min-height: 44px;
+  .case-search {
+    flex: 1 1 145px;
+    min-width: 0;
   }
 }
 </style>

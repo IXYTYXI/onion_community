@@ -3,7 +3,10 @@ import { computed, nextTick } from "vue";
 import { retryContent } from "../router.js";
 import { actions, engagement } from "../services/engagement.js";
 
-const props = defineProps({ item: { type: Object, required: true } });
+const props = defineProps({
+  item: { type: Object, required: true },
+  compact: Boolean,
+});
 const { state } = engagement;
 const current = computed(() => state.items[props.item.id]);
 const keyFor = (action) => props.item.id + ":" + action;
@@ -35,6 +38,7 @@ async function toggle(action, event) {
   <div
     v-if="item.remote"
     class="case-actions"
+    :class="{ compact }"
     role="group"
     :aria-label="item.title + '的互动'"
   >
@@ -49,6 +53,11 @@ async function toggle(action, event) {
       :aria-busy="!!state.pending[keyFor(key)]"
       :aria-pressed="!!current?.[action.flag]"
       :aria-label="action.label"
+      :title="
+        compact
+          ? (current?.[action.flag] ? '取消' : '') + action.label
+          : undefined
+      "
       :aria-description="
         current
           ? '共 ' + counts.format(current[action.count]) + ' 人' + action.label
@@ -57,7 +66,7 @@ async function toggle(action, event) {
       @click="toggle(key, $event)"
     >
       <Icon :name="action.icon" />
-      <span class="action-label">{{
+      <span v-if="!compact" class="action-label">{{
         current?.[action.flag] ? "已" + action.label : action.label
       }}</span>
       <span class="case-action-count">{{
@@ -146,8 +155,34 @@ async function toggle(action, event) {
     color: #164888;
   }
 }
+.case-actions.compact {
+  justify-content: flex-end;
+  gap: 2px;
+}
+.compact button[data-action] {
+  min-width: 36px;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #51647b;
+}
+.compact button[aria-pressed="true"] {
+  color: #1c55ab;
+  background: #e9f1ff;
+}
+.compact button[data-action]:hover:enabled {
+  color: #164d97;
+  background: #edf3fc;
+}
+.compact button[aria-busy="true"] {
+  opacity: 0.55;
+}
 @media (pointer: coarse) {
-  .case-actions button {
+  .case-actions button,
+  .compact button[data-action] {
+    min-width: 44px;
     min-height: 44px;
   }
 }

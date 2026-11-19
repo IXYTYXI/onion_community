@@ -35,15 +35,20 @@ const props = defineProps({
         </div>
         <h3>{{ item.title }}</h3>
         <p v-if="item.summary" class="case-description">{{ item.summary }}</p>
-        <div class="case-tile-meta">
-          <UAvatar
-            :alt="item.author || item.team || 'OWS'"
-            size="2xs"
-          /><span>{{ item.source || "个人分享" }}</span
-          ><TripleArrow compact />
-        </div></div
-    ></AppLink>
-    <CaseActions v-if="item.remote" class="tile-actions" :item="item" />
+      </div>
+    </AppLink>
+    <div class="tile-footer">
+      <div class="tile-author">
+        <UAvatar :alt="item.author || item.team || 'OWS'" size="2xs" />
+        <span :title="item.source">{{ item.source || "个人分享" }}</span>
+      </div>
+      <CaseActions
+        v-if="item.remote"
+        compact
+        class="tile-actions"
+        :item="item"
+      />
+    </div>
   </article>
 </template>
 
@@ -66,7 +71,39 @@ const props = defineProps({
 .case-tile h3 {
   overflow-wrap: anywhere;
 }
+.case-tile-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.case-tile-content {
+  padding-bottom: 16px;
+}
+.tile-footer {
+  margin: 0 20px;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line, #e1e8f0);
+}
+.tile-author {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #53647c;
+  font-size: 12px;
+}
+.tile-author > :last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tile-actions {
-  padding: 0 20px 16px;
+  position: relative;
+  flex-shrink: 0;
+  max-width: 65%;
 }
 </style>
