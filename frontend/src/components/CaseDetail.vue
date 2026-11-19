@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import CaseActions from "./CaseActions.vue";
 import CaseCover from "./CaseCover.vue";
 import TripleArrow from "./TripleArrow.vue";
 import { detailUrl, safeUrl } from "../services/urls.js";
@@ -40,6 +41,7 @@ const facts = computed(() =>
         </div>
         <h1>{{ item.title }}</h1>
         <p v-if="item.summary" class="story-summary">{{ item.summary }}</p>
+        <CaseActions :item="item" class="detail-engagement" />
         <dl class="story-facts">
           <div v-for="[label, value] in facts" :key="label">
             <dt>{{ label }}</dt>
@@ -89,12 +91,8 @@ const facts = computed(() =>
         <h2 id="related-case-title">继续探索<span>.</span></h2>
         <span>相关案例</span>
       </header>
-      <AppLink
-        v-for="(entry, index) in related"
-        :key="entry.id"
-        :href="detailUrl('case', entry.id)"
-        class="related-story"
-      >
+      <article v-for="(entry, index) in related" :key="entry.id" class="related-story">
+        <AppLink :href="detailUrl('case', entry.id)" class="related-link" :aria-label="'查看案例：' + entry.title">
         <div class="related-image">
           <CaseCover :item="entry" /><span class="related-number"
             >0{{ index + 1 }}</span
@@ -109,7 +107,9 @@ const facts = computed(() =>
             ><TripleArrow />
           </footer>
         </div>
-      </AppLink>
+        </AppLink>
+        <CaseActions :item="entry" class="related-actions" />
+      </article>
       <AppLink href="cases.html" class="story-all"
         >探索全部案例 <TripleArrow
       /></AppLink>
@@ -218,6 +218,7 @@ const facts = computed(() =>
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
+.detail-engagement { margin-top:18px; }
 .story-facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -332,6 +333,9 @@ const facts = computed(() =>
     transform 0.25s,
     box-shadow 0.25s;
 }
+.related-link { display:block; }
+.related-link:focus-visible { outline:3px solid #4086e3; outline-offset:-3px; }
+.related-actions { padding:0 16px 15px; }
 .related-image {
   position: relative;
   overflow: hidden;

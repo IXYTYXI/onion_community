@@ -27,6 +27,8 @@ from app.integrations.feishu_directory import FeishuDirectorySource
 from app.services.officers import OfficerService
 from app.services.cases import CaseService, CASE_FIELDS
 from app.api.cases import router as cases_router
+from app.services.case_engagement import CaseEngagementService, ENGAGEMENT_FIELDS
+from app.integrations.bitable_writer import BitableWriter
 from app.api.banner import router as banner_router
 from app.api.ows_release import router as ows_release_router
 from app.services.banner import BannerService, BANNER_FIELDS
@@ -81,6 +83,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                 app.state.officers = OfficerService(selected, FeishuDirectorySource(client, settings, selected), settings)
                 app.state.cases = CaseService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.cases_table_id, view_id=settings.cases_view_id, fields=CASE_FIELDS), settings)
+                app.state.case_engagement = CaseEngagementService(selected, BitableWriter(client, settings, selected,
+                    table_id=settings.cases_engagement_table_id, fields=ENGAGEMENT_FIELDS), settings)
                 app.state.banner = BannerService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.banner_table_id, view_id=settings.banner_view_id, fields=BANNER_FIELDS, automatic_fields=True), settings)
                 app.state.faq = FAQService(selected, FeishuDirectorySource(client, settings, selected,

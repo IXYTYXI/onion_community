@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     officers_source_tenant: str = ""
     cases_table_id: str = ""
     cases_view_id: str = ""
+    cases_engagement_table_id: str = ""
+    case_personal_lists: Literal["00", "01", "10", "11"] = "01"
     cases_cache_seconds: int = Field(default=1800, ge=10, le=86400)
     cases_stale_seconds: int = Field(default=604800, ge=60, le=2592000)
     cases_source_tenant: str = ""
@@ -90,6 +92,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def check_deployment(self):
+        if self.cases_table_id == "tbldtSGzcfa6twD0" and not self.cases_engagement_table_id:
+            self.cases_engagement_table_id = "tblUTQgRmYHxdiuh"
         if self.assistant_enabled and (
             self.store_backend != 'redis' or not self.assistant_agent_id
             or not self.assistant_feedback_base.get_secret_value() or not self.assistant_feedback_table

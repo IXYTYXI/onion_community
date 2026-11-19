@@ -1,98 +1,181 @@
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-export function useCatalog(props) {
-  const route = useRoute(),
-    router = useRouter();
-  const page = route.meta.page;
-  const pageSize = page === "news" ? 7 : 6;
-  const params = new URLSearchParams(route.query);
-  const mine = computed(() => route.query.mine === "1");
-  const category = ref(params.get("category") || "全部"),
-    query = ref(params.get("q") || ""),
-    number = ref(Math.max(1, parseInt(params.get("page")) || 1));
-  const categories = computed(() =>
-    page === "news"
-      ? [
-          "全部",
-          ...new Set(
-            props.state.news.map((item) => item.category).filter(Boolean),
-          ),
-        ]
-      : [
-          "全部",
-          ...new Set(
-            props.state.cases
-              .filter((c) => (mine.value ? c.local : c.remote))
-              .flatMap((c) => (c.tags?.length ? c.tags : [c.category]))
-              .filter(Boolean),
-          ),
-        ],
-  );
-  watch(
-    categories,
-    (values) => {
-      if (!values.includes(category.value)) category.value = "全部";
-    },
-    { immediate: true },
-  );
-  const matches = computed(() =>
-    page === "news"
-      ? props.state.news.filter(
-          (c) => category.value === "全部" || c.category === category.value,
-        )
-      : props.state.cases.filter(
-          (c) =>
-            (mine.value ? c.local : c.remote) &&
-            (category.value === "全部" ||
-              (c.tags || [c.category]).includes(category.value)) &&
-            `${c.title} ${c.summary} ${c.tags || ""} ${c.source} ${c.product_type || ""}`
-              .toLowerCase()
-              .includes(query.value.trim().toLowerCase()),
-        ),
-  );
-  const visible = computed(() =>
-    matches.value.slice((number.value - 1) * pageSize, number.value * pageSize),
-  );
-  watch(
-    [matches, category, query, number],
-    () => {
-      if (!["cases", "news"].includes(page)) return;
-      number.value = Math.min(
-        number.value,
-        Math.max(1, Math.ceil(matches.value.length / pageSize)),
-      );
-      const p = new URLSearchParams();
-      if (category.value !== "全部") p.set("category", category.value);
-      if (query.value) p.set("q", query.value);
-      if (mine.value) p.set("mine", "1");
-      if (number.value > 1) p.set("page", number.value);
-      if (route.meta.page === page) {
-        const next = route.path + (p.size ? "?" + p : "");
-        if (next !== route.fullPath) router.replace(next);
-      }
-    },
-    { immediate: true },
-  );
+import { actions, engagement, personalCases } from "../services/engagement.js";
 
+export function useCatalog(props, store = engagement.state) {
+  const route = useRoute();
+  const router = useRouter();
+  const page = route.meta.page;
+  const news = page === "news";
+  const pageSize = news ? 7 : 6;
+  const category = ref("全部"),
+    query = ref(""),
+    number = ref(1),
+    sort = ref("default");
+  const collection = ref("all");
+  const mine = computed(() => collection.value === "mine");
+  const personal = computed(() => Object.hasOwn(actions, collection.value));
+  const sourceReady = computed(
+    () =>
+      !props.state.loading &&
+      !props.state.casesError &&
+      !props.state.casesStale,
+  );
+  const ready = computed(
+    () =>
+      news ||
+      mine.value ||
+      (sourceReady.value &&
+        ((!personal.value && sort.value !== "likes") ||
+          store.status === "ready")),
+  );
   watch(
     () => route.query,
     (params) => {
       if (route.meta.page !== page) return;
-      category.value = params.category || "全部";
-      query.value = params.q || "";
+      collection.value =
+        !news && params.mine === "1"
+          ? "mine"
+          : !news && Object.hasOwn(actions, params.collection)
+            ? params.collection
+            : "all";
+      category.value = typeof params.category === "string" ? params.category : "全部";
+      query.value = typeof params.q === "string" ? params.q : "";
       number.value = Math.max(1, parseInt(params.page) || 1);
+      sort.value =
+        !news && !mine.value && params.sort === "likes" ? "likes" : "default";
     },
+    { immediate: true, flush: "sync" },
   );
 
+  // Capture counts only when the user requests another ordering or a fresh
+  // directory arrives. Successful clicks update the displayed counts in place.
+  const ranking = shallowRef({});
+  watch(
+    [
+      category,
+      query,
+      sort,
+      collection,
+      () => store.snapshot,
+      () => props.state.cases,
+    ],
+    () => {
+      if (sort.value === "likes") {
+        ranking.value = Object.fromEntries(
+          Object.entries(store.items).map(([id, item]) => [
+            id,
+            item.like_count,
+          ]),
+        );
+      }
+    },
+    { immediate: true, flush: "sync" },
+  );
+
+  const base = computed(() => {
+    if (news) return props.state.news;
+    if (personal.value) {
+      if (
+        !sourceReady.value ||
+        store.status !== "ready" ||
+        store.switches[actions[collection.value].bit] !== "1"
+      )
+        return [];
+      return personalCases(props.state.cases, store.items, collection.value);
+    }
+    return props.state.cases.filter((c) => (mine.value ? c.local : c.remote));
+  });
+  const tags = (item) => (item.tags?.length ? item.tags : [item.category]);
+  const categories = computed(() => [
+    "全部",
+    ...new Set(
+      base.value
+        .flatMap((c) => (news ? [c.category] : tags(c)))
+        .filter(Boolean),
+    ),
+  ]);
+  const matches = computed(() => {
+    const term = query.value.trim().toLowerCase();
+    const filtered = base.value.filter(
+      (item) =>
+        (category.value === "全部" ||
+          (news ? [item.category] : tags(item)).includes(category.value)) &&
+        (news ||
+          [
+            item.title,
+            item.summary,
+            ...tags(item),
+            item.source,
+            item.product_type,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(term)),
+    );
+    if (sort.value === "likes")
+      filtered.sort(
+        (a, b) => (ranking.value[b.id] || 0) - (ranking.value[a.id] || 0),
+      );
+    return filtered;
+  });
+  const visible = computed(() =>
+    matches.value.slice((number.value - 1) * pageSize, number.value * pageSize),
+  );
+
+  watch(
+    [
+      collection,
+      sort,
+      category,
+      query,
+      number,
+      matches,
+      ready,
+      () => store.switches,
+    ],
+    () => {
+      if (route.meta.page !== page) return;
+      if (
+        personal.value &&
+        store.status === "ready" &&
+        store.switches[actions[collection.value].bit] !== "1"
+      ) {
+        router.replace({ path: route.path });
+        return;
+      }
+      if (ready.value) {
+        if (!categories.value.includes(category.value)) category.value = "全部";
+        number.value = Math.min(
+          number.value,
+          Math.max(1, Math.ceil(matches.value.length / pageSize)),
+        );
+      }
+      const params = new URLSearchParams();
+      if (personal.value) params.set("collection", collection.value);
+      if (mine.value) params.set("mine", "1");
+      if (category.value !== "全部") params.set("category", category.value);
+      if (query.value) params.set("q", query.value);
+      if (sort.value === "likes") params.set("sort", "likes");
+      if (number.value > 1) params.set("page", number.value);
+      const next = route.path + (params.size ? "?" + params : "");
+      if (next !== route.fullPath) router.replace(next);
+    },
+    { immediate: true },
+  );
   return {
     page,
     pageSize,
     mine,
+    personal,
+    collection,
+    sort,
     category,
     query,
     number,
     categories,
     matches,
     visible,
+    ready,
   };
 }

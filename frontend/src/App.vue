@@ -3,9 +3,9 @@ import AssistantWidget from "./components/AssistantWidget.vue";
 import AmbientBackground from "./components/AmbientBackground.vue";
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
-import { router, navigation } from "./router.js";
+import { router, navigation, retryContent } from "./router.js";
 import { auth, user } from "./services/auth.js";
-import { repository } from "./services/content.js";
+import { engagement } from "./services/engagement.js";
 import SiteShell from "./components/SiteShell.vue";
 import ContentEditor from "./components/ContentEditor.vue";
 const route = useRoute();
@@ -30,13 +30,16 @@ watch(
   },
   { immediate: true },
 );
-async function retry() {
-  navigation.content = await repository.getContent({
-    page: route.meta.page,
-    search: new URL(route.fullPath, location.origin).search,
-    previous: state.value,
-  });
-}
+// Only a fresh, successfully authorized case directory can enable interactions.
+watch(
+  [() => state.value.cases, () => state.value.casesError, () => state.value.casesStale],
+  () => {
+    if (!user.value || state.value.casesError || state.value.casesStale) engagement.reset();
+    else if (state.value.casesStale === false)
+      engagement.refresh();
+  },
+  { immediate: true, flush: "sync" },
+);
 function saved(value) {
   navigation.content = value;
   toast.value = "已保存到本机浏览器。";
@@ -91,7 +94,7 @@ onUnmounted(() => {
                 :state="state"
                 :user="user"
                 @compose="editor.open($event)"
-                @retry="retry"
+                @retry="retryContent"
               />
             </div>
           </Transition>

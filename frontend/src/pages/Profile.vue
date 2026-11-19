@@ -1,4 +1,5 @@
 <script setup>
+import ProfileCaseCollections from "../components/ProfileCaseCollections.vue";
 import PageBreadcrumb from "../components/PageBreadcrumb.vue";
 import { ref } from "vue";
 import { auth } from "../services/auth.js";
@@ -93,6 +94,7 @@ async function logout() {
         <p>AI激励政策正在积极规划中...</p>
       </section>
     </div>
+    <ProfileCaseCollections :state="state" @retry="emit('retry')" />
     <div class="profile-bottom">
       <AppLink href="index.html"
         >返回首页 <span><TripleArrow compact /></span

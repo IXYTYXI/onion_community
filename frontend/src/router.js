@@ -1,10 +1,18 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { reactive } from "vue";
-import { auth } from "./services/auth.js";
+import { reactive, watch } from "vue";
+import { accountKey } from "./services/engagement.js";
+import { auth, user } from "./services/auth.js";
 import { repository } from "./services/content.js";
 
 export const navigation = reactive({ pending: "", error: "", content: null });
 let navigationId = 0;
+watch(() => accountKey(user.value), (next, previous) => {
+  if (previous && next !== previous) {
+    ++navigationId;
+    navigation.content = null;
+    if (next) location.reload();
+  }
+}, { flush: "sync" });
 const definitions = [
   ["index", "home", "Home", "首页"],
   ["cases", "cases", "Cases", "案例库"],
@@ -46,9 +54,40 @@ export const router = createRouter({
     );
   },
 });
+function sameDirectory(to, from) {
+  return to.path === from.path && (to.name !== "detail" || to.query.type === from.query.type);
+}
+
+async function refreshContent(route, requestId) {
+  const previous = navigation.content;
+  navigation.content = { ...previous, loading: true };
+  try {
+    const [, content] = await Promise.all([
+      auth.refresh(),
+      repository.getContent({
+        page: route.meta.page,
+        search: new URL(route.fullPath, location.origin).search,
+        previous,
+      }),
+    ]);
+    if (requestId === navigationId) navigation.content = content;
+  } catch (error) {
+    if (requestId === navigationId) {
+      navigation.error = error.message || "页面暂时无法加载，请重试。";
+      navigation.content = { ...previous, cases: [], casesStale: false, casesError: navigation.error, loading: false };
+    }
+  } finally {
+    if (requestId === navigationId) navigation.pending = "";
+  }
+}
+
+export function retryContent() {
+  return refreshContent(router.currentRoute.value, ++navigationId);
+}
+
 router.beforeEach(async (to, from) => {
-  if (to.path === from.path && to.search === from.search && navigation.content) return;
-  ++navigationId;
+  if (sameDirectory(to, from) && navigation.content) return;
+  const currentId = ++navigationId;
   navigation.pending = to.path;
   navigation.error = "";
   // A signed-in client can show the next route using the current snapshot.
@@ -56,11 +95,13 @@ router.beforeEach(async (to, from) => {
   if (auth.user && navigation.content) return;
   try {
     await auth.refresh();
-    navigation.content = await repository.getContent({
+    const content = await repository.getContent({
       page: to.meta.page,
       search: new URL(to.fullPath, location.origin).search,
     });
+    if (currentId === navigationId) navigation.content = content;
   } catch (error) {
+    if (currentId !== navigationId) return false;
     navigation.error = error.message || "页面暂时无法加载，请重试。";
     navigation.pending = "";
     // Initial errors must render a retry state; later errors retain the current page.
@@ -76,30 +117,11 @@ router.afterEach((to, from, failure) => {
   document.body.className =
     to.meta.page === "profile" ? "profile-page" : "portal-body";
   document.title = `${to.meta.title} — OWS Community`;
-  if (!from.name || (to.path === from.path && to.search === from.search)) {
+  if (!from.name || sameDirectory(to, from)) {
     navigation.pending = "";
     return;
   }
-  const currentId = navigationId;
-  const previous = navigation.content;
-  navigation.content = { ...previous, loading: true };
-  Promise.all([
-    auth.refresh(),
-    repository.getContent({
-      page: to.meta.page,
-      search: new URL(to.fullPath, location.origin).search,
-      previous,
-    }),
-  ]).then(([, content]) => {
-    if (currentId === navigationId) navigation.content = content;
-  }).catch((error) => {
-    if (currentId === navigationId) {
-      navigation.error = error.message || "页面暂时无法加载，请重试。";
-      navigation.content = { ...navigation.content, loading: false };
-    }
-  }).finally(() => {
-    if (currentId === navigationId) navigation.pending = "";
-  });
+  refreshContent(to, navigationId);
 });
 router.onError((error) => {
   navigation.pending = "";

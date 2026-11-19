@@ -44,7 +44,7 @@ async function getContent({
     : local;
   const params = new URLSearchParams(search);
   const needsCases =
-    ["home", "cases", "skills"].includes(page) ||
+    ["home", "cases", "skills", "profile"].includes(page) ||
     (page === "detail" && params.get("type") === "case");
   const needsBanner = page === "home" || (page === "detail" && params.get("type") === "event");
   const bannerRequest = needsBanner
@@ -75,10 +75,12 @@ async function getContent({
   }).catch(error => { state.faqError = error.message || "常见问题暂时无法加载"; }) : Promise.resolve();
   const casesRequest = needsCases ? auth.request("/api/v1/cases").then(data => {
     state.cases = [...data.items.map(adapt), ...local.cases];
-    state.casesStale = data.stale;
+    state.casesStale = Boolean(data.stale);
     state.casesUpdatedAt = data.updated_at;
     delete state.casesError;
   }).catch(error => {
+    state.cases = local.cases;
+    state.casesStale = false;
     state.casesError = error.message || "案例暂时无法加载";
   }) : Promise.resolve();
   await Promise.all([bannerRequest, newsRequest, casesRequest, faqRequest]);

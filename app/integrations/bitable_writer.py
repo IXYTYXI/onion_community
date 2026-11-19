@@ -39,10 +39,13 @@ class BitableWriter(FeishuDirectorySource):
         # Synchronization must see hidden/filtered rows too; a view is presentation only.
         return await self.all_records()
 
-    async def all_records(self):
+    async def all_records(self, *, record_filter=None):
         base = quote(self.settings.feishu_bitable_app_token.get_secret_value(), safe="")
         path = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{base}/tables/{self.table_id}/records/search"
         rows, page, seen = [], None, set()
+        body = {"field_names": self.fields}
+        if record_filter is not None:
+            body["filter"] = record_filter
         for _ in range(200):
             params = {"page_size": 500}
             if page:
@@ -50,7 +53,7 @@ class BitableWriter(FeishuDirectorySource):
             response = await self.client.post(
                 path,
                 params=params,
-                json={"field_names": self.fields},
+                json=body,
                 headers={"Authorization": "Bearer " + await self.token()},
                 timeout=40,
             )
@@ -63,6 +66,19 @@ class BitableWriter(FeishuDirectorySource):
                 raise ValueError("Invalid Feishu pagination")
             seen.add(page)
         raise ValueError("Feishu pagination limit exceeded")
+
+    async def create_once(self, fields, client_token):
+        """Create one record with Feishu's UUID idempotency parameter."""
+        base = quote(self.settings.feishu_bitable_app_token.get_secret_value(), safe="")
+        table = quote(self.table_id, safe="")
+        response = await self.client.post(
+            f"https://open.feishu.cn/open-apis/bitable/v1/apps/{base}/tables/{table}/records",
+            headers={"Authorization": "Bearer " + await self.token()},
+            params={"client_token": client_token},
+            json={"fields": fields},
+            timeout=40,
+        )
+        return self.payload(response)["data"]["record"]
 
     async def write(self, records, *, update=False):
         if not records:

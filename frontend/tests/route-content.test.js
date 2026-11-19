@@ -21,3 +21,14 @@ test('case refresh keeps already loaded homepage sections during a route change'
   assert.deepEqual(result.banner, previous.banner);
   assert.deepEqual(result.faq, previous.faq);
 });
+
+test('profile refresh discards remote cases from an earlier successful read on denial', async t => {
+  globalThis.localStorage = { getItem: () => JSON.stringify({ cases: [], news: [] }) };
+  t.mock.method(auth, 'request', async path => {
+    assert.equal(path, '/api/v1/cases');
+    throw new Error('无权读取案例');
+  });
+  const result = await repository.getContent({ page:'profile', search:'', previous:{ cases:[{ id:'old', remote:true }] } });
+  assert.deepEqual(result.cases, []);
+  assert.equal(result.casesError, '无权读取案例');
+});

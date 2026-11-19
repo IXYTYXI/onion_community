@@ -56,3 +56,13 @@ OWS_COMMUNITY_CASES_SOURCE_TENANT=
 2026-10-26 对比 lark-cli 和应用 OpenAPI 后，确认「一句话描述」为 is_extend=true 的扩展字段，应用查询没有返回其值。在原案例表新增公式「网站案例描述」（fldQGzvqUT），表达式 `[一句话描述] & ""`，供 OpenAPI 读取；无需重复维护描述。读取优先级：一句话描述 → 网站案例描述 → 一句话简单描述。已用真实应用请求验证该公式返回原描述。
 
 「团队 AI 官」是人员查找引用，后端解析 value 中的人员列表，仅输出姓名及经过 open_id 校验的聊天 URL，不向前端返回邮箱、头像地址或原始字段。多名 AI 官分别提供按钮，同一 open_id 去重，没有有效 ID 时不猜测联系人。随案例共享快照缓存 30 分钟。
+
+## 点赞与收藏
+
+互动数据保存在案例库同一 Base 的「点赞收藏表」。文本列「案例ID」保存案例原始 record_id。每个飞书账号与案例共用一行，两项操作各有独立的勾选字段和时间字段。取消操作会清掉对应的勾选状态和时间，再次操作使用新的时间。
+
+部署配置为 OWS_COMMUNITY_CASES_ENGAGEMENT_TABLE_ID。现有案例表 tbldtSGzcfa6twD0 默认绑定 tblUTQgRmYHxdiuh。其他案例来源需指定相应互动表，站点的飞书应用需要能读取和写入该表。
+
+OWS_COMMUNITY_CASE_PERSONAL_LISTS 第一位控制「我的点赞」，第二位控制「我的收藏」。00 隐藏两个集合，01 仅展示收藏（默认），10 仅展示点赞，11 同时展示两个。卡片和详情的互动按钮在四种设置下均可使用。
+
+GET /api/v1/cases/engagement 返回可见案例的有效人数和当前账号状态。可传 personal=like 或 personal=favorite 获取已启用的个人集合。PUT /api/v1/cases/{case_id}/engagement/{action} 接收布尔字段 active，并返回确认后的状态。两端点要求飞书登录，沿用案例来源租户限制。Redis 共享汇总有效期 30 秒，站内写入完成或结果不明确时更换缓存版本。案例目录的可见性更新沿用现有同步周期。目录回退到过期快照时暂停个人列表和互动写入。
