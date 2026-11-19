@@ -11,13 +11,18 @@ const header = ref(null),
   menuOpen = ref(false);
 let observer;
 const links = [
-  ["home", "index.html", "首页"],
-  ["cases", "cases.html", "案例库"],
-  ["news", "news.html", "AI 资讯"],
-  ["skills", "https://onionhub.yc345.tv/", "SkillHub"],
-  ["connect", "connect.html", "接入 OWS"],
-  ["officers", "officers.html", "AI 领航团"],
-  ["services", "services.html", "常用服务"],
+  ["home", "index.html", "首页", "社区大门：精选内容一站速览"],
+  ["cases", "cases.html", "案例库", "看其他光年怎么用 AI，找灵感抄作业"],
+  ["news", "news.html", "AI 资讯", "全球 AI 前沿动态，每日更新"],
+  [
+    "skills",
+    "https://onionhub.yc345.tv/",
+    "SkillHub",
+    "（站外链接）Skill 商店：找 Skill、发 Skill、装 Skill",
+  ],
+  ["connect", "connect.html", "接入 OWS", "把 OWS 装进你自己的 Agent"],
+  ["officers", "officers.html", "AI 领航团", "AI 相关的人，都在这里"],
+  ["services", "services.html", "常用服务", "AI 相关办事大厅"],
 ];
 onMounted(() => {
   observer = new ResizeObserver(() =>
@@ -55,7 +60,7 @@ onUnmounted(() => observer?.disconnect());
       ></AppLink>
       <nav class="ows-desktop-nav" aria-label="主导航">
         <AppLink
-          v-for="[key, href, label] in links"
+          v-for="[key, href, label, hint] in links"
           :key="key"
           :href="href"
           :class="{
@@ -63,9 +68,14 @@ onUnmounted(() => observer?.disconnect());
             pending: navigation.pending === '/' + href,
           }"
           :aria-current="page === key ? 'page' : undefined"
+          :aria-label="label"
+          :aria-describedby="`nav-hint-${key}`"
           :target="key === 'skills' ? '_blank' : undefined"
           :rel="key === 'skills' ? 'noopener noreferrer' : undefined"
-          >{{ label }}</AppLink
+          >{{ label
+          }}<span :id="`nav-hint-${key}`" class="nav-tooltip" role="tooltip">{{
+            hint
+          }}</span></AppLink
         >
       </nav>
       <div class="ows-header-actions">
@@ -73,7 +83,14 @@ onUnmounted(() => observer?.disconnect());
           class="header-deploy"
           href="deploy.html"
           :aria-current="page === 'deploy' ? 'page' : undefined"
-          ><Icon name="rocket" /> 一键部署</AppLink
+          aria-label="一键部署"
+          aria-describedby="nav-hint-deploy"
+          ><Icon name="rocket" /> 一键部署<span
+            id="nav-hint-deploy"
+            class="nav-tooltip"
+            role="tooltip"
+            >把代码仓库发布成线上应用</span
+          ></AppLink
         ><AppLink
           href="profile.html"
           class="header-profile"
