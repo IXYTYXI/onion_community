@@ -27,6 +27,8 @@ from app.integrations.feishu_directory import FeishuDirectorySource
 from app.services.officers import OfficerService
 from app.services.cases import CaseService, CASE_FIELDS
 from app.api.cases import router as cases_router
+from app.repositories.case_interactions import CaseInteractionDB
+from app.services.case_coins import CaseCoins, COIN_FIELDS
 from app.services.case_engagement import CaseEngagementService, ENGAGEMENT_FIELDS
 from app.integrations.bitable_writer import BitableWriter
 from app.api.banner import router as banner_router
@@ -83,8 +85,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                 app.state.officers = OfficerService(selected, FeishuDirectorySource(client, settings, selected), settings)
                 app.state.cases = CaseService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.cases_table_id, view_id=settings.cases_view_id, fields=CASE_FIELDS), settings)
+                db = CaseInteractionDB(settings.case_interactions_db)
                 app.state.case_engagement = CaseEngagementService(selected, BitableWriter(client, settings, selected,
-                    table_id=settings.cases_engagement_table_id, fields=ENGAGEMENT_FIELDS), settings)
+                    table_id=settings.cases_engagement_table_id, fields=ENGAGEMENT_FIELDS), settings, db)
                 app.state.banner = BannerService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.banner_table_id, view_id=settings.banner_view_id, fields=BANNER_FIELDS, automatic_fields=True), settings)
                 app.state.faq = FAQService(selected, FeishuDirectorySource(client, settings, selected,
@@ -94,12 +97,22 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                 app.state.news_sync = NewsSync(client, NewsTable(client, settings, selected,
                     table_id=settings.news_table_id, view_id=settings.news_view_id, fields=NEWS_FIELDS), app.state.news, settings)
                 app.state.assistant = AssistantService(selected, AilyClient(client, settings, selected), settings, app.state.faq)
-                task = asyncio.create_task(app.state.news_sync.run()) if settings.news_sync_enabled else None
+                tasks = []
+                if settings.news_sync_enabled:
+                    tasks.append(asyncio.create_task(app.state.news_sync.run()))
+                if settings.cases_engagement_table_id:
+                    tasks.append(asyncio.create_task(app.state.case_engagement.run()))
+                if settings.coin_base_token.get_secret_value() and settings.coin_table_id and settings.cases_engagement_table_id:
+                    ledger = BitableWriter(client, settings, selected, base_token=settings.coin_base_token,
+                                           table_id=settings.coin_table_id, fields=COIN_FIELDS)
+                    rewards = CaseCoins(db, ledger, app.state.cases, settings)
+                    tasks.append(asyncio.create_task(rewards.run()))
                 try:
                     yield
                 finally:
-                    if task:
+                    for task in tasks:
                         task.cancel()
+                    for task in tasks:
                         with suppress(asyncio.CancelledError):
                             await task
         finally:

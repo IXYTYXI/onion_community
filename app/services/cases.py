@@ -78,6 +78,8 @@ class CaseService(CachedSnapshotService, PrivateImageCache):
             if not title:
                 raise ValueError('Missing case title')
             authors = fields.get('第一作者') or []
+            if isinstance(authors, dict):
+                authors = authors.get('value', authors)
             author = text_value(authors)
             contact_url = None
             if isinstance(authors, list) and len(authors) == 1 and isinstance(authors[0], dict):

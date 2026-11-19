@@ -8,9 +8,30 @@ from app.core.errors import AppError
 from app.integrations.feishu_directory import FeishuDirectorySource
 
 
+class BitablePermissionError(AppError):
+    def __init__(self, upstream_code):
+        super().__init__(ErrorCode.UPSTREAM_ERROR)
+        self.upstream_code = upstream_code
+
+
 class BitableWriter(FeishuDirectorySource):
-    def __init__(self, *args, **kwargs):
+    @staticmethod
+    def payload(response):
+        try:
+            return FeishuDirectorySource.payload(response)
+        except AppError:
+            try:
+                data = response.json()
+            except ValueError:
+                data = {}
+            code = data.get("code") if isinstance(data, dict) else None
+            if response.status_code == 403 or code == 91403:
+                raise BitablePermissionError(code or response.status_code) from None
+            raise
+
+    def __init__(self, *args, base_token=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.base_token = self.settings.feishu_bitable_app_token if base_token is None else base_token
         self.token_key += ":bitable-writer"
 
     async def token(self):
@@ -40,7 +61,7 @@ class BitableWriter(FeishuDirectorySource):
         return await self.all_records()
 
     async def all_records(self, *, record_filter=None):
-        base = quote(self.settings.feishu_bitable_app_token.get_secret_value(), safe="")
+        base = quote(self.base_token.get_secret_value(), safe="")
         path = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{base}/tables/{self.table_id}/records/search"
         rows, page, seen = [], None, set()
         body = {"field_names": self.fields}
@@ -69,7 +90,7 @@ class BitableWriter(FeishuDirectorySource):
 
     async def create_once(self, fields, client_token):
         """Create one record with Feishu's UUID idempotency parameter."""
-        base = quote(self.settings.feishu_bitable_app_token.get_secret_value(), safe="")
+        base = quote(self.base_token.get_secret_value(), safe="")
         table = quote(self.table_id, safe="")
         response = await self.client.post(
             f"https://open.feishu.cn/open-apis/bitable/v1/apps/{base}/tables/{table}/records",
@@ -83,7 +104,7 @@ class BitableWriter(FeishuDirectorySource):
     async def write(self, records, *, update=False):
         if not records:
             return []
-        base = quote(self.settings.feishu_bitable_app_token.get_secret_value(), safe="")
+        base = quote(self.base_token.get_secret_value(), safe="")
         action = "batch_update" if update else "batch_create"
         response = await self.client.post(
             f"https://open.feishu.cn/open-apis/bitable/v1/apps/{base}/tables/{self.table_id}/records/{action}",

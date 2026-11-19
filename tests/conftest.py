@@ -11,6 +11,7 @@ DEV_KEY = "test-key-only-not-for-production-12345"
 @pytest.fixture
 def settings(tmp_path):
     return Settings(_env_file=None, deploy_state_root=tmp_path / "deployment", news_sync_enabled=False, environment="test", store_backend="memory",
+                    case_interactions_db=tmp_path / "case-interactions.sqlite3",
                     dev_login_enabled=True, dev_login_key=DEV_KEY, max_body_bytes=1024)
 
 

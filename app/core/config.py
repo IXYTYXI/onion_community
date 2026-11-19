@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     cases_table_id: str = ""
     cases_view_id: str = ""
     cases_engagement_table_id: str = ""
+    case_interactions_db: Path | None = None
+    coin_base_token: SecretStr = SecretStr("")
+    coin_table_id: str = ""
     case_personal_lists: Literal["00", "01", "10", "11"] = "01"
     cases_cache_seconds: int = Field(default=1800, ge=10, le=86400)
     cases_stale_seconds: int = Field(default=604800, ge=60, le=2592000)
@@ -94,6 +97,13 @@ class Settings(BaseSettings):
     def check_deployment(self):
         if self.cases_table_id == "tbldtSGzcfa6twD0" and not self.cases_engagement_table_id:
             self.cases_engagement_table_id = "tblUTQgRmYHxdiuh"
+        coin_override_fields = self.model_fields_set & {"coin_base_token", "coin_table_id"}
+        if (self.cases_table_id == "tbldtSGzcfa6twD0"
+                and self.cases_engagement_table_id == "tblUTQgRmYHxdiuh"
+                and not self.coin_base_token.get_secret_value() and not self.coin_table_id
+                and len(coin_override_fields) != 1):
+            self.coin_base_token = SecretStr("OyLfbjbNnah8bCsrmHEc18aSn3c")
+            self.coin_table_id = "tblTlqxQN2L9QI90"
         if self.assistant_enabled and (
             self.store_backend != 'redis' or not self.assistant_agent_id
             or not self.assistant_feedback_base.get_secret_value() or not self.assistant_feedback_table
@@ -134,6 +144,9 @@ class Settings(BaseSettings):
             self.deploy_state_root = PROJECT_ROOT / self.deploy_state_root
         if self.deploy_engine_config and not self.deploy_engine_config.is_absolute():
             self.deploy_engine_config = PROJECT_ROOT / self.deploy_engine_config
+        if self.case_interactions_db is None:
+            root = Path("/var/lib/ows-community") if self.environment == "production" else PROJECT_ROOT / "var"
+            self.case_interactions_db = root / "case-interactions.sqlite3"
         if not self.media_root.is_absolute():
             self.media_root = PROJECT_ROOT / self.media_root
         return self

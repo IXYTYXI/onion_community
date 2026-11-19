@@ -25,6 +25,7 @@ services:
       OWS_COMMUNITY_ENVIRONMENT: production
       OWS_COMMUNITY_STORE_BACKEND: redis
       OWS_COMMUNITY_REDIS_URL: redis://redis:6379/0
+      OWS_COMMUNITY_CASE_INTERACTIONS_DB: /app/var/case-interactions.sqlite3
       OWS_COMMUNITY_MEDIA_ROOT: /app/var/media
       OWS_COMMUNITY_NEWS_SYNC_STATE_ROOT: /app/var/news-sync
     user: "${OWS_UID:-1001}:${OWS_GID:-1001}"

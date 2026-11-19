@@ -289,3 +289,18 @@ def test_formula_description_bridge_and_officer_lookup(service):
     assert item.ai_officers[0].chat_url.endswith('openId=ou_first')
     assert 'private@example.com' not in result.model_dump_json()
     assert result.items[1].ai_officers == []
+
+
+@pytest.mark.parametrize(('authors', 'expected'), [
+    ({'type': 11, 'value': [{'name': '作者', 'id': 'ou_unique'}]}, 'ou_unique'),
+    ([{'name': '同名', 'id': 'ou_one'}, {'name': '同名', 'id': 'ou_two'}], None),
+    ([{'name': '同名'}], None),
+    ('同名', None),
+])
+def test_rewards_require_a_unique_first_author_open_id(service, authors, expected):
+    from app.services.case_coins import recipient
+
+    data = rows()
+    data[0]['fields']['第一作者'] = authors
+    result, _ = service.normalize(data)
+    assert recipient(result.items[0])[0] == (expected or '')
