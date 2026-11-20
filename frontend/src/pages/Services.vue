@@ -5,6 +5,28 @@ import PageBreadcrumb from "../components/PageBreadcrumb.vue";
 import ReimbursementDialog from "../components/ReimbursementDialog.vue";
 import TextLinks from "../components/TextLinks.vue";
 import toolChannels from "../data/tool-channels.json";
+const incentives = [
+  {
+    id: "points", theme: "points", icon: "gift",
+    title: "优秀 AI 案例贡献", reward: "200 元现金",
+    description: "优秀案例通过组织效能审核并进入 AI 资产库后，奖励随入库当月工资发放。请联系团队 AI 官协助上传，暂不支持个人直接上传。",
+  },
+  {
+    id: "officer", theme: "people", icon: "users",
+    title: "全司培训分享", reward: "30 光年币",
+    description: "受邀在「洋葱新视界」「光年有话说」等活动分享 AI 经验或心得，完成分享后即可获得奖励。",
+  },
+  {
+    id: "group-topic", theme: "relay", icon: "notebook-pen",
+    title: "「AI 又双叒叕了」群聊发言", reward: "每次 5 光年币",
+    description: "在「AI 又双叒叕了」群聊发起话题即可获得奖励，此项每月最多获得 20 光年币。",
+  },
+  {
+    id: "skill-upload", theme: "official", icon: "layers",
+    title: "SkillHub 上传 Skill", reward: "每个达标 Skill 5 光年币",
+    description: "在洋葱 SkillHub 上传 Skill，实际下载量达到 3 次即可获得奖励。此项每月最多获得 20 光年币。",
+  },
+];
 const reimbursement = ref(null);
 const expandedChannel = ref(null);
 function toggleChannel(id) {
@@ -109,57 +131,28 @@ function toggleChannel(id) {
     </section>
     <section class="service-group" aria-labelledby="other-heading">
       <div class="service-group-heading">
-        <h2 id="other-heading"><Icon name="layers" />其他服务</h2>
+        <h2 id="other-heading"><Icon name="layers" />AI 激励</h2>
         <span class="group-divider" aria-hidden="true"></span>
       </div>
       <div class="services-grid other-grid">
-        <section id="points" class="service-card service-card--points">
+        <article
+          v-for="policy in incentives"
+          :key="policy.id"
+          :id="policy.id"
+          class="service-card"
+          :class="`service-card--${policy.theme}`"
+        >
           <div class="service-card-top">
-            <span class="service-label"><b>04</b>激励</span>
-            <span class="service-art service-art--reward" aria-hidden="true">
-              <span class="art-orbit"></span
-              ><span class="art-tile"><Icon name="gift" /></span>
+            <strong class="incentive-reward">{{ policy.reward }}</strong>
+            <span class="service-art" aria-hidden="true">
+              <span class="art-orbit"></span>
+              <span class="art-tile"><Icon :name="policy.icon" /></span>
               <span class="art-spark"><Icon name="sparkles" /></span>
             </span>
           </div>
-          <h2>AI 激励计划</h2>
-          <p>AI激励政策正在积极规划中...</p>
-          <div class="service-card-footer">
-            <span class="incentive-hint">
-              <button
-                type="button"
-                class="service-action service-action--disabled"
-                aria-disabled="true"
-                aria-describedby="incentive-tooltip"
-              >
-                查看激励 <TripleArrow compact />
-              </button>
-              <span
-                id="incentive-tooltip"
-                class="service-tooltip"
-                role="tooltip"
-                >AI激励政策正在积极规划中...</span
-              >
-            </span>
-          </div>
-        </section>
-        <section id="officer" class="service-card service-card--people">
-          <div class="service-card-top">
-            <span class="service-label"><b>05</b>支持</span>
-            <span class="service-art service-art--people" aria-hidden="true">
-              <span class="art-orbit"></span
-              ><span class="art-tile"><Icon name="users" /></span>
-              <span class="art-spark"><Icon name="sparkles" /></span>
-            </span>
-          </div>
-          <h2>联系团队 AI 领航团</h2>
-          <p>组织效能团队与各业务团队 AI 领航团。</p>
-          <div class="service-card-footer">
-            <AppLink class="service-action" href="officers.html"
-              >查看 AI 领航团 <TripleArrow compact
-            /></AppLink>
-          </div>
-        </section>
+          <h3>{{ policy.title }}</h3>
+          <p>{{ policy.description }}</p>
+        </article>
       </div>
     </section>
     <ReimbursementDialog ref="reimbursement" />
@@ -315,19 +308,19 @@ function toggleChannel(id) {
   width: 18px;
   height: 18px;
 }
-.service-art--reward .art-tile {
+.service-card--points .art-tile {
   transform: rotate(-9deg);
   border-radius: 50%;
   width: 66px;
   height: 66px;
 }
-.service-art--people .art-tile {
+.service-card--people .art-tile {
   transform: rotate(5deg);
 }
 .service-card:hover .art-tile {
   transform: translateY(-3px) rotate(0deg);
 }
-.service-card h2 {
+.other-grid h3 {
   margin: 0;
   font-size: clamp(20px, 1.65vw, 26px);
   line-height: 1.4;
@@ -362,52 +355,14 @@ function toggleChannel(id) {
   padding: 0;
   cursor: pointer;
 }
-.service-card--expense .service-action,
-.service-card--people .service-action {
+.service-card--expense .service-action {
   width: 100%;
 }
-.service-action--disabled {
-  color: #939ba9;
-  cursor: not-allowed;
-}
-.incentive-hint {
-  position: relative;
-  display: inline-flex;
-  width: 100%;
-}
-.incentive-hint .service-action {
-  width: 100%;
-}
-.service-tooltip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 5;
-  width: max-content;
-  max-width: min(280px, 75vw);
-  padding: 12px 16px;
-  border: 1px solid #ffffff36;
-  border-radius: 12px;
-  background: #283b52;
-  color: #fff;
-  box-shadow: 0 10px 28px #20364d26;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.6;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(5px);
-  transition:
-    opacity 0.18s,
-    transform 0.18s,
-    visibility 0.18s;
-}
-.incentive-hint:hover .service-tooltip,
-.incentive-hint:focus-within .service-tooltip {
-  visibility: visible;
-  opacity: 1;
-  transform: translateY(0);
+.incentive-reward {
+  padding-top: 8px;
+  color: #274460;
+  font-size: 16px;
+  line-height: 1.5;
 }
 .service-card--expense:focus-visible,
 .service-action:focus-visible {
@@ -433,7 +388,7 @@ function toggleChannel(id) {
     min-height: 300px;
     grid-template-rows: 88px auto 1fr 60px;
   }
-  .service-card h2 {
+  .other-grid h3 {
     font-size: 23px;
   }
   .service-card p {
@@ -442,8 +397,7 @@ function toggleChannel(id) {
 }
 @media (prefers-reduced-motion: reduce) {
   .service-card,
-  .art-tile,
-  .service-tooltip {
+  .art-tile {
     transition: none;
   }
   .service-card:hover,
@@ -501,7 +455,11 @@ function toggleChannel(id) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .other-grid .service-card {
-  min-height: 420px;
+  grid-template-rows: 104px auto 1fr;
+  min-height: 0;
+}
+.other-grid p {
+  color: #52677d;
 }
 .service-card--relay {
   --accent: #576a9e;
