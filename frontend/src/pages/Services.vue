@@ -3,35 +3,54 @@ import { ref } from "vue";
 import PageHeading from "../components/PageHeading.vue";
 import PageBreadcrumb from "../components/PageBreadcrumb.vue";
 import ReimbursementDialog from "../components/ReimbursementDialog.vue";
-import TextLinks from "../components/TextLinks.vue";
+import ServiceRules from "../components/ServiceRules.vue";
 import toolChannels from "../data/tool-channels.json";
 const incentives = [
   {
     id: "points", theme: "points", icon: "gift",
     title: "优秀 AI 案例贡献", reward: "200 元现金",
-    description: "优秀案例通过组织效能审核并进入 AI 资产库后，奖励随入库当月工资发放。请联系团队 AI 官协助上传，暂不支持个人直接上传。",
+    description: "审核通过并入库的优秀 AI 案例可获现金奖励。",
+    rows: [
+      { label: "获奖条件", text: "优秀案例通过组织效能审核，并进入 AI 资产库。" },
+      { label: "奖励发放", text: "创作者获得 200 元现金，随审核通过并入库当月的工资发放。" },
+      { label: "如何上传", text: "暂不支持个人直接上传，请联系团队 AI 官协助上传。" },
+    ],
   },
   {
     id: "officer", theme: "people", icon: "users",
     title: "全司培训分享", reward: "30 光年币",
-    description: "受邀在「洋葱新视界」「光年有话说」等活动分享 AI 经验或心得，完成分享后即可获得奖励。",
+    description: "受邀完成全司 AI 主题分享可获奖励。",
+    rows: [
+      { label: "适用活动", text: "「洋葱新视界」「光年有话说」等全司活动。" },
+      { label: "获奖条件", text: "受邀分享 AI 相关的经验或心得。" },
+      { label: "奖励发放", text: "创作者完成分享后获得 30 光年币。" },
+    ],
   },
   {
     id: "group-topic", theme: "relay", icon: "notebook-pen",
     title: "「AI 又双叒叕了」群聊发言", reward: "每次 5 光年币",
-    description: "在「AI 又双叒叕了」群聊发起话题即可获得奖励，此项每月最多获得 20 光年币。",
+    description: "在群里发起 AI 话题，每月最多获得 20 光年币。",
+    rows: [
+      { label: "获奖条件", text: "在「AI 又双叒叕了」群聊中发起话题。" },
+      { label: "单次奖励", text: "话题发起者每次获得 5 光年币。" },
+      { label: "月度上限", text: "每人每月通过此项最多获得 20 光年币。" },
+    ],
   },
   {
     id: "skill-upload", theme: "official", icon: "layers",
     title: "SkillHub 上传 Skill", reward: "每个达标 Skill 5 光年币",
-    description: "在洋葱 SkillHub 上传 Skill，实际下载量达到 3 次即可获得奖励。此项每月最多获得 20 光年币。",
+    description: "上传的 Skill 实际下载达到 3 次即可获奖。",
+    rows: [
+      { label: "发布平台", text: "在洋葱 SkillHub 上传 Skill。" },
+      { label: "获奖条件", text: "该 Skill 的实际下载量达到 3 次或以上。" },
+      { label: "单次奖励", text: "每个达标 Skill 奖励 5 光年币。" },
+      { label: "月度上限", text: "每人每月通过此项最多获得 20 光年币。" },
+    ],
   },
 ];
 const reimbursement = ref(null);
 const expandedChannel = ref(null);
-function toggleChannel(id) {
-  expandedChannel.value = expandedChannel.value === id ? null : id;
-}
+const expandedPolicy = ref(null);
 </script>
 
 <template>
@@ -77,36 +96,14 @@ function toggleChannel(id) {
             <strong>{{ channel.amount }}</strong
             ><span>{{ channel.unit }}</span>
           </div>
-          <button
-            class="channel-toggle"
-            type="button"
-            :aria-expanded="expandedChannel === channel.id"
-            :aria-controls="`channel-rules-${channel.id}`"
-            :aria-label="`${channel.title}渠道规则`"
-            @click="toggleChannel(channel.id)"
-          >
-            <span>渠道规则</span>
-            <TripleArrow
-              compact
-              :direction="expandedChannel === channel.id ? 'up' : 'down'"
-            />
-          </button>
-          <div
-            :id="`channel-rules-${channel.id}`"
-            class="channel-disclosure"
-            :class="{ 'is-open': expandedChannel === channel.id }"
-            :inert="expandedChannel !== channel.id"
-            :aria-hidden="expandedChannel !== channel.id"
-          >
-            <div class="channel-disclosure-inner">
-              <dl class="channel-rules">
-                <div v-for="row in channel.rows" :key="row.label">
-                  <dt>{{ row.label }}</dt>
-                  <dd><TextLinks :text="row.text" link-label="注册入口" /></dd>
-                </div>
-              </dl>
-            </div>
-          </div>
+          <ServiceRules
+            :panel-id="`channel-rules-${channel.id}`"
+            :title="channel.title"
+            label="渠道规则"
+            :rows="channel.rows"
+            :open="expandedChannel === channel.id"
+            @toggle="expandedChannel = expandedChannel === channel.id ? null : channel.id"
+          />
           <div class="service-card-footer">
             <button
               v-if="channel.id === 'expense'"
@@ -152,6 +149,14 @@ function toggleChannel(id) {
           </div>
           <h3>{{ policy.title }}</h3>
           <p>{{ policy.description }}</p>
+          <ServiceRules
+            :panel-id="`policy-rules-${policy.id}`"
+            :title="policy.title"
+            label="激励规则"
+            :rows="policy.rows"
+            :open="expandedPolicy === policy.id"
+            @toggle="expandedPolicy = expandedPolicy === policy.id ? null : policy.id"
+          />
         </article>
       </div>
     </section>
@@ -452,14 +457,18 @@ function toggleChannel(id) {
   border-radius: 3px;
 }
 .other-grid {
+  align-items: start;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .other-grid .service-card {
-  grid-template-rows: 104px auto 1fr;
+  grid-template-rows: 104px auto auto auto auto;
   min-height: 0;
 }
 .other-grid p {
   color: #52677d;
+  margin-bottom: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #849eb929;
 }
 .service-card--relay {
   --accent: #576a9e;
@@ -541,30 +550,6 @@ function toggleChannel(id) {
 .channel-allowance span {
   font-size: 11px;
 }
-.channel-rules {
-  margin: 8px 0 22px;
-  font-size: 13px;
-  line-height: 1.85;
-}
-.channel-rules > div {
-  display: grid;
-  grid-template-columns: 66px minmax(0, 1fr);
-  gap: 12px;
-  padding: 13px 0;
-  border-bottom: 1px solid #849eb91b;
-}
-.channel-rules > div:last-child {
-  border-bottom: 0;
-}
-.channel-rules dt {
-  color: #718397;
-  font-size: 12px;
-}
-.channel-rules dd {
-  margin: 0;
-  color: #3f556b;
-  overflow-wrap: anywhere;
-}
 .tool-card .service-card-footer {
   margin-top: auto;
   min-height: 66px;
@@ -576,10 +561,6 @@ function toggleChannel(id) {
 @media (max-width: 1100px) and (min-width: 761px) {
   .tool-card {
     padding: 22px 18px 12px;
-  }
-  .channel-rules > div {
-    grid-template-columns: 1fr;
-    gap: 3px;
   }
   .tool-title {
     align-items: flex-start;
@@ -610,47 +591,4 @@ function toggleChannel(id) {
   }
 }
 
-.channel-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 54px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.channel-toggle:hover {
-  color: #1b4b73;
-}
-.channel-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-.channel-disclosure {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows 0.32s ease,
-    opacity 0.22s ease;
-}
-.channel-disclosure.is-open {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-.channel-disclosure-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .channel-disclosure {
-    transition: none;
-  }
-}
 </style>
