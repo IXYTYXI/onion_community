@@ -275,3 +275,19 @@ async def test_91403_pauses_whole_ledger_across_restart_and_recovers(coins, monk
     assert not await db.pending_coins()
     assert {r['fields'][CASE] for r in ledger.rows} == {'a', 'b', 'c'}
     assert worker().permission_backoff()[0] == 0
+
+async def test_paused_ledger_keeps_milestones_and_replays_in_order(coins):
+    from app.services.site_settings import Switches
+    db, ledger, _, worker = coins
+    service = worker()
+    service.site = AsyncMock()
+    service.site.current.return_value = Switches(True, False, "01")
+    for likes, favorites in [(5, 5), (4, 5), (5, 5)]:
+        await add_event(db, service.scope, likes, favorites)
+    assert await service.flush() == 0
+    assert not ledger.rows
+    assert await db.pending_coins()
+    service.site.current.return_value = Switches(True, True, "01")
+    await drain(service)
+    assert [row["fields"][AMOUNT] for row in ledger.rows] == [2, -2, 2]
+    assert not await db.pending_coins()

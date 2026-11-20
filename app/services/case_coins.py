@@ -41,7 +41,8 @@ def digest(*parts):
 
 
 class CaseCoins:
-    def __init__(self, db, writer, cases, settings):
+    def __init__(self, db, writer, cases, settings, site=None):
+        self.site = site
         self.db, self.writer, self.cases = db, writer, cases
         self.path = Path(db.path)
         self.after = None
@@ -148,6 +149,8 @@ class CaseCoins:
                 # Freeze the resolved author and exact request before a potentially ambiguous create.
                 await asyncio.to_thread(self.progress, case_id, seq, prepared)
             key = fields[KEY]
+            if self.site and not (await self.site.current()).ledger:
+                return False
             record = await self.writer.create_once(fields, str(UUID(hex=key[:32], version=4)))
             ack = record.get('fields', {})
             if (not record.get('record_id') or text_value(ack.get(KEY)) != key
@@ -178,6 +181,8 @@ class CaseCoins:
             events = await self.db.pending_coins(PAGE_SIZE, scope=self.scope, after=self.after)
             if not events and self.after is not None:
                 events = await self.db.pending_coins(PAGE_SIZE, scope=self.scope)
+            if events and self.site and not (await self.site.current()).ledger:
+                return 0
             if not events:
                 self.after = None
                 return 0

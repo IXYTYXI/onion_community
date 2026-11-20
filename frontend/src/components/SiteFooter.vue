@@ -1,6 +1,9 @@
 <script setup>
+import { useVisitors } from '../composables/useVisitors.js';
 import SectionDivider from './SectionDivider.vue';
 import TripleArrow from './TripleArrow.vue';
+const counts = useVisitors();
+const numbers = new Intl.NumberFormat('zh-CN');
 </script>
 <template>
   <footer class="brand-footer wrap">
@@ -11,7 +14,13 @@ import TripleArrow from './TripleArrow.vue';
         <div class="footer-brand"><AppLink href="index.html" aria-label="OWS Community 首页"><img src="/assets/ows-community-logo.png" alt="OWS Community" width="2172" height="724" /></AppLink><h2>洋葱 AI 实践社区<span>.</span></h2></div>
         <div class="footer-owner"><span class="footer-owner-dot" aria-hidden="true"></span><span>Powered By @人力团队 · 组织效能</span></div>
       </div>
-      <div class="footer-baseline"><span></span><nav aria-label="页尾导航"><AppLink href="cases.html">案例库</AppLink><AppLink href="news.html">AI 资讯</AppLink><AppLink href="officers.html">AI 领航团</AppLink></nav><AppLink href="index.html" class="footer-home">回到首页 <TripleArrow /></AppLink></div>
+      <div class="footer-baseline">
+        <dl v-if="counts" class="footer-visitors" aria-label="社区访客统计">
+          <div><dt>总访客</dt><dd>{{ numbers.format(counts.total) }}</dd></div>
+          <div><dt>今日访客</dt><dd>{{ numbers.format(counts.today) }}</dd></div>
+          <div title="最近 5 分钟活跃的访客"><dt>在线人数</dt><dd>{{ numbers.format(counts.online) }}</dd></div>
+        </dl>
+        <nav aria-label="页尾导航"><AppLink href="cases.html">案例库</AppLink><AppLink href="news.html">AI 资讯</AppLink><AppLink href="officers.html">AI 领航团</AppLink></nav><AppLink href="index.html" class="footer-home">回到首页 <TripleArrow /></AppLink></div>
     </div>
   </footer>
 </template>
@@ -27,8 +36,10 @@ import TripleArrow from './TripleArrow.vue';
 .footer-owner { position:relative; z-index:1; margin-top:72px; display:flex; align-items:center; gap:10px; color:#4d7198; font-size:13px; border:1px solid #ffffffd9; background:#ffffffc9; border-radius:40px; padding:13px 20px; }
 .footer-owner-dot { width:6px; height:6px; border-radius:50%; background:#4385d8; box-shadow:0 0 0 5px #d8e9ff8c; margin-right:3px; }
 .footer-baseline { display:flex; justify-content:space-between; align-items:center; gap:24px; padding-top:19px; border-top:1px solid #8aaed02e; font-size:11px; color:#6484a6; }
-.footer-baseline > span { font-size:9px; letter-spacing:2.5px; }
-.footer-baseline nav { display:flex; flex-wrap:wrap; gap:26px; }
+.footer-visitors { display:flex; align-items:center; flex-wrap:wrap; gap:6px 20px; margin:0; color:#405f80; font-size:12px; }
+.footer-visitors div { display:flex; align-items:baseline; gap:6px; }
+.footer-visitors dd { margin:0; color:#25466e; font-weight:650; font-variant-numeric:tabular-nums; }
+.footer-baseline nav { margin-left:auto; display:flex; flex-wrap:wrap; gap:26px; }
 .footer-baseline a:hover { color:#1e68c3; }
 .footer-home { white-space:nowrap; flex-shrink:0; display:flex; align-items:center; gap:8px; }
 .footer-watermark { position:absolute; z-index:-1; right:8%; bottom:8px; font-size:150px; font-weight:750; letter-spacing:-14px; color:#86aeda0c; line-height:1; }
@@ -43,5 +54,5 @@ import TripleArrow from './TripleArrow.vue';
 @media(max-width:650px) { .footer-constellation { position:relative; top:auto; right:auto; margin:0 0 18px auto; width:280px; max-width:100%; height:100px; } .footer-constellation i { left:calc(var(--n) * 30px); } .footer-owner { margin-top:0; flex-wrap:wrap; } }
 @media(prefers-reduced-motion:reduce) { .footer-constellation i { animation:none; } }
 .footer-surface a:focus-visible { outline:2px solid #4486db; outline-offset:5px; border-radius:4px; }
-@media(max-width:800px) { .brand-footer { margin-top:0; } .footer-surface { padding:28px 24px 20px; border-radius:24px; } .footer-main { align-items:flex-start; flex-direction:column; gap:24px; padding-bottom:26px; } .footer-brand img { width:210px; } .footer-baseline { flex-wrap:wrap; gap:18px; } .footer-baseline > span { width:100%; } .footer-baseline nav { gap:16px; } .footer-owner { padding:10px 16px; font-size:12px; } .footer-home { gap:3px; } }
+@media(max-width:800px) { .brand-footer { margin-top:0; } .footer-surface { padding:28px 24px 20px; border-radius:24px; } .footer-main { align-items:flex-start; flex-direction:column; gap:24px; padding-bottom:26px; } .footer-brand img { width:210px; } .footer-baseline { flex-wrap:wrap; gap:18px; } .footer-visitors { width:100%; } .footer-baseline nav { gap:16px; } .footer-owner { padding:10px 16px; font-size:12px; } .footer-home { gap:3px; } }
 </style>

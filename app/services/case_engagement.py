@@ -46,7 +46,8 @@ def case_metadata(item):
 
 
 class CaseEngagementService:
-    def __init__(self, store, writer, settings, db):
+    def __init__(self, store, writer, settings, db, site=None):
+        self.site = site
         self.store, self.writer, self.settings, self.db = store, writer, settings, db
         self.import_lock = asyncio.Lock()
         self.after = None
@@ -110,7 +111,7 @@ class CaseEngagementService:
 
     async def directory(self, cases, user, personal=None):
         scope, account = self.identity(user)
-        switches = self.settings.case_personal_lists
+        switches = (await self.site.current()).personal if self.site else self.settings.case_personal_lists
         if personal and switches[0 if personal == 'like' else 1] == '0':
             raise AppError(ErrorCode.NOT_FOUND)
         visible = await self.visible_cases(cases)

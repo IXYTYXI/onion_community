@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     case_interactions_db: Path | None = None
     coin_base_token: SecretStr = SecretStr("")
     coin_table_id: str = ""
+    site_switch_table_id: str = ""
+    site_switch_webhook_token: SecretStr = SecretStr("")
     case_personal_lists: Literal["00", "01", "10", "11"] = "01"
     cases_cache_seconds: int = Field(default=1800, ge=10, le=86400)
     cases_stale_seconds: int = Field(default=604800, ge=60, le=2592000)

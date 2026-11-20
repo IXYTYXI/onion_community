@@ -26,6 +26,8 @@ from app.api.officers import router as officers_router
 from app.integrations.feishu_directory import FeishuDirectorySource
 from app.services.officers import OfficerService
 from app.services.cases import CaseService, CASE_FIELDS
+from app.api.site_settings import router as site_router
+from app.services.site_settings import FIELDS as SWITCH_FIELDS, SiteState
 from app.api.cases import router as cases_router
 from app.repositories.case_interactions import CaseInteractionDB
 from app.services.case_coins import CaseCoins, COIN_FIELDS
@@ -86,8 +88,11 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                 app.state.cases = CaseService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.cases_table_id, view_id=settings.cases_view_id, fields=CASE_FIELDS), settings)
                 db = CaseInteractionDB(settings.case_interactions_db)
+                switch_source = BitableWriter(client, settings, selected, base_token=settings.coin_base_token,
+                    table_id=settings.site_switch_table_id, fields=SWITCH_FIELDS) if settings.site_switch_table_id else None
+                app.state.site = SiteState(settings, switch_source)
                 app.state.case_engagement = CaseEngagementService(selected, BitableWriter(client, settings, selected,
-                    table_id=settings.cases_engagement_table_id, fields=ENGAGEMENT_FIELDS), settings, db)
+                    table_id=settings.cases_engagement_table_id, fields=ENGAGEMENT_FIELDS), settings, db, app.state.site)
                 app.state.banner = BannerService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.banner_table_id, view_id=settings.banner_view_id, fields=BANNER_FIELDS, automatic_fields=True), settings)
                 app.state.faq = FAQService(selected, FeishuDirectorySource(client, settings, selected,
@@ -98,6 +103,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                     table_id=settings.news_table_id, view_id=settings.news_view_id, fields=NEWS_FIELDS), app.state.news, settings)
                 app.state.assistant = AssistantService(selected, AilyClient(client, settings, selected), settings, app.state.faq)
                 tasks = []
+                if switch_source is not None:
+                    tasks.append(asyncio.create_task(app.state.site.bootstrap()))
                 if settings.news_sync_enabled:
                     tasks.append(asyncio.create_task(app.state.news_sync.run()))
                 if settings.cases_engagement_table_id:
@@ -105,7 +112,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                 if settings.coin_base_token.get_secret_value() and settings.coin_table_id and settings.cases_engagement_table_id:
                     ledger = BitableWriter(client, settings, selected, base_token=settings.coin_base_token,
                                            table_id=settings.coin_table_id, fields=COIN_FIELDS)
-                    rewards = CaseCoins(db, ledger, app.state.cases, settings)
+                    rewards = CaseCoins(db, ledger, app.state.cases, settings, app.state.site)
                     tasks.append(asyncio.create_task(rewards.run()))
                 try:
                     yield
@@ -132,6 +139,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
     app.include_router(router)
     app.include_router(browser)
     app.include_router(officers_router)
+    app.include_router(site_router)
     app.include_router(cases_router)
     app.include_router(news_router)
     app.include_router(faq_router)
