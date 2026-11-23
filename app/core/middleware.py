@@ -12,6 +12,7 @@ from app.core.error_codes import ErrorCode
 
 logger = logging.getLogger("ows_community")
 REQUEST_ID = re.compile(r"^[a-zA-Z0-9_-]{8,64}$")
+VERSIONED_SKILL_POSTER = re.compile(r"^/assets/ows-skill-cli-poster-[A-Za-z0-9_-]{8}\.png$")
 
 
 class RequestMiddleware:
@@ -41,7 +42,13 @@ class RequestMiddleware:
                 response_headers["X-Request-ID"] = request_id
                 response_headers["X-Content-Type-Options"] = "nosniff"
                 response_headers["Server-Timing"] = f"app;dur={(time.perf_counter()-started)*1000:.2f}"
-                response_headers["Cache-Control"] = "no-store"
+                # Only the content-hashed marketing poster may live in a private
+                # browser cache. Authenticated API media and HTML stay no-store.
+                response_headers["Cache-Control"] = (
+                    "private, max-age=31536000, immutable"
+                    if status == 200 and VERSIONED_SKILL_POSTER.fullmatch(scope["path"])
+                    else "no-store"
+                )
             await send(message)
 
         async def reject(code: ErrorCode):

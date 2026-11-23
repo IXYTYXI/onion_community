@@ -103,6 +103,22 @@ def test_unauthenticated_pages_assets_and_no_source_leaks(client):
         assert client.get(path).status_code==200
 
 
+def test_versioned_skill_poster_uses_private_browser_cache_after_login(client):
+    from app.api.pages import FRONTEND
+
+    posters = list((FRONTEND / "assets").glob("ows-skill-cli-poster-*.png"))
+    assert len(posters) == 1
+    path = "/assets/" + posters[0].name
+    assert client.get(path).status_code == 401
+
+    assert client.post("/api/v1/auth/dev", headers={"X-Dev-Login-Key": DEV_KEY}).status_code == 200
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
+    assert client.get("/index.html").headers["Cache-Control"] == "no-store"
+    assert client.get("/assets/ows-community-logo.png").headers["Cache-Control"] == "no-store"
+
+
 def test_deployment_skill_download_is_authenticated_complete_zip(client):
     from io import BytesIO
     from zipfile import ZipFile

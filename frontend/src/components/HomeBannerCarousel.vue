@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import CommunityArtwork from "./CommunityArtwork.vue";
 import TripleArrow from "./TripleArrow.vue";
+import skillPosterUrl from "../assets/ows-skill-cli-poster.png";
 import { defaultBanner } from "../services/defaults.js";
 import { imageUrl, safeUrl } from "../services/urls.js";
 
@@ -43,7 +44,7 @@ function onPointerLeave() {
 
 onMounted(() => {
   const skillPoster = new Image();
-  skillPoster.src = "/assets/ows-skill-cli-poster.png";
+  skillPoster.src = skillPosterUrl;
   motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
   document.addEventListener('visibilitychange', scheduleNext);
   motionPreference.addEventListener('change', scheduleNext);
@@ -106,7 +107,7 @@ function onBeforeLeave(element) {
         <div v-else key="skill" class="home-carousel-slide" role="group" aria-roledescription="幻灯片" aria-label="第 2 张，共 2 张">
           <section class="campaign-banner campaign-skill-banner" aria-labelledby="skill-banner-title">
             <h1 id="skill-banner-title" class="visually-hidden">让你的 AI 助手用上公司知识</h1>
-            <img src="/assets/ows-skill-cli-poster.png" width="1200" height="675" alt="OWS Skill + CLI：让你的 AI 助手用上公司知识，查公司资料、获取原文引用，连接常用 AI 工具。使用本人飞书身份，按已有权限读取。" loading="lazy" />
+            <img :src="skillPosterUrl" width="1200" height="675" alt="OWS Skill + CLI：让你的 AI 助手用上公司知识，查公司资料、获取原文引用，连接常用 AI 工具。使用本人飞书身份，按已有权限读取。" loading="lazy" />
             <AppLink href="connect.html" class="skill-banner-link" aria-label="接入 OWS"><span class="visually-hidden">接入 OWS</span></AppLink>
           </section>
         </div>
