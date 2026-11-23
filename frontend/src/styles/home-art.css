@@ -610,8 +610,7 @@
   height: 22px;
 }
 .home-carousel-arrow-previous .ui-icon { transform: rotate(180deg); }
-.home-carousel-arrow:hover,
-.home-carousel-dot:hover {
+.home-carousel-arrow:hover {
   background: #fff;
   border-color: #86b6ee;
   color: #134998;
@@ -658,6 +657,9 @@
   height: 8px;
   border-radius: 999px;
   background: #a5bfdc;
+}
+.home-carousel-dot:hover span {
+  background: #4c86d5;
 }
 .home-carousel-dot.active span {
   width: 32px;
