@@ -644,23 +644,6 @@
   backdrop-filter: blur(8px);
   pointer-events: none;
 }
-.home-carousel-playback {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid #e6f2ff;
-  border-radius: 50%;
-  background: #f8fbffdf;
-  color: #2463c9;
-  pointer-events: auto;
-}
-.home-carousel-playback:hover { background: #fff; border-color: #86b6ee; color: #134998; }
-.home-carousel-playback:focus-visible { outline: 3px solid #2b72dc; outline-offset: 3px; }
-.home-carousel-playback .ui-icon { width: 18px; height: 18px; }
 .home-carousel-dot {
   position: relative;
   width: 44px;
@@ -687,7 +670,6 @@
   .home-carousel-arrow-previous { left: 6px; }
   .home-carousel-arrow-next { right: 6px; }
   .home-carousel-dots { bottom: 6px; }
-  .home-carousel-playback { right: 8px; bottom: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-slide-next-enter-active,

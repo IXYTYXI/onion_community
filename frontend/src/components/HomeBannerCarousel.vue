@@ -15,7 +15,6 @@ const active = ref(0);
 const direction = ref("next");
 const pointerInside = ref(false);
 const focusInside = ref(false);
-const paused = ref(false);
 const userResumed = ref(false);
 let timer;
 let motionPreference;
@@ -23,7 +22,7 @@ watch(() => currentBanner.value.image, () => (imageFailed.value = false));
 
 function scheduleNext() {
   clearTimeout(timer);
-  if (document.hidden || paused.value || motionPreference?.matches || ((pointerInside.value || focusInside.value) && !userResumed.value)) return;
+  if (document.hidden || motionPreference?.matches || ((pointerInside.value || focusInside.value) && !userResumed.value)) return;
   timer = setTimeout(() => {
     move(1, false);
     scheduleNext();
@@ -41,12 +40,6 @@ function onFocusOut(event) {
 function onPointerLeave() {
   pointerInside.value = false;
   if (!focusInside.value) userResumed.value = false;
-  scheduleNext();
-}
-
-function toggleAutoplay() {
-  paused.value = !paused.value;
-  userResumed.value = !paused.value;
   scheduleNext();
 }
 
@@ -121,7 +114,6 @@ function move(delta, resetTimer = true) {
       <div class="home-carousel-dots">
         <button v-for="index in 2" :key="index" type="button" class="home-carousel-dot" :class="{ active: active === index - 1 }" :aria-label="`显示第 ${index} 张海报`" :aria-current="active === index - 1 ? 'true' : undefined" @click="show(index - 1)"><span></span></button>
       </div>
-      <button type="button" class="home-carousel-playback" :aria-label="paused ? '继续自动轮播' : '暂停自动轮播'" :aria-pressed="paused" @click="toggleAutoplay"><Icon :name="paused ? 'play' : 'pause'" /></button>
       <button type="button" class="home-carousel-arrow home-carousel-arrow-next" aria-label="下一张海报" @click="move(1)"><Icon name="chevron-right" /></button>
     </div>
   </section>
