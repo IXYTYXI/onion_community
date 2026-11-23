@@ -505,26 +505,39 @@
 .home-carousel-slide {
   width: 100%;
 }
-.home-slide-next-enter-active,
-.home-slide-next-leave-active,
-.home-slide-previous-enter-active,
-.home-slide-previous-leave-active {
-  transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.36s ease;
+.home-ripple-enter-active {
+  position: relative;
+  z-index: 2;
+  animation: home-ripple-reveal 1.1s cubic-bezier(0.22, 0.78, 0.16, 1) both;
 }
-.home-slide-next-leave-active,
-.home-slide-previous-leave-active {
+.home-ripple-enter-active::after {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  z-index: 3;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 31%, #b7eaff70 34%, #71bcf047 36%, transparent 40%);
+  pointer-events: none;
+  animation: home-ripple-light 1.1s ease-out both;
+}
+.home-ripple-leave-active {
   position: absolute;
   inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  animation: home-ripple-hold 1.1s linear both;
 }
-.home-slide-next-enter-from,
-.home-slide-previous-leave-to {
-  transform: translateX(100%);
-  opacity: 0.65;
+@keyframes home-ripple-hold {
+  from, to { opacity: 1; }
 }
-.home-slide-next-leave-to,
-.home-slide-previous-enter-from {
-  transform: translateX(-100%);
-  opacity: 0.65;
+@keyframes home-ripple-reveal {
+  from { clip-path: circle(0% at 50% 50%); }
+  to { clip-path: circle(100% at 50% 50%); }
+}
+@keyframes home-ripple-light {
+  0%, 18% { opacity: 0; transform: scale(0.12); }
+  40% { opacity: 0.75; }
+  100% { opacity: 0; transform: scale(1.75); }
 }
 .campaign-skill-banner {
   min-height: 0;
@@ -589,6 +602,7 @@
   touch-action: manipulation;
 }
 .home-carousel-arrow {
+  --arrow-idle-opacity: 0.72;
   position: absolute;
   top: 50%;
   width: clamp(40px, 2.8vw, 52px);
@@ -605,11 +619,7 @@
 }
 .home-carousel-arrow-previous { left: 12px; }
 .home-carousel-arrow-next { right: 12px; }
-.home-carousel-arrow .ui-icon {
-  width: 22px;
-  height: 22px;
-}
-.home-carousel-arrow-previous .ui-icon { transform: rotate(180deg); }
+.home-carousel-arrow .triple-arrow { width: 28px; }
 .home-carousel-arrow:hover {
   background: #fff;
   border-color: #86b6ee;
@@ -674,10 +684,10 @@
   .home-carousel-dots { bottom: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .home-slide-next-enter-active,
-  .home-slide-next-leave-active,
-  .home-slide-previous-enter-active,
-  .home-slide-previous-leave-active,
+  .home-ripple-enter-active,
+  .home-ripple-leave-active,
+  .home-ripple-enter-active::after { animation: none; }
+  .home-ripple-enter-active { clip-path: none; }
   .home-carousel-arrow,
   .home-carousel-dot,
   .home-carousel-dot span { transition: none; }

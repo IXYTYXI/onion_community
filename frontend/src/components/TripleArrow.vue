@@ -76,7 +76,7 @@ defineProps({
   width: 48%;
   height: auto;
   margin-left: -16%;
-  opacity: 0.35;
+  opacity: var(--arrow-idle-opacity, 0.35);
   animation: triple-flow 2.4s ease-in-out infinite;
 }
 .triple-arrow .ui-icon:first-child {
@@ -92,7 +92,7 @@ defineProps({
   0%,
   65%,
   100% {
-    opacity: 0.3;
+    opacity: var(--arrow-idle-opacity, 0.3);
     transform: translateX(0);
   }
   30% {

@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import CommunityArtwork from "./CommunityArtwork.vue";
-import Icon from "./Icon.vue";
 import TripleArrow from "./TripleArrow.vue";
 import { defaultBanner } from "../services/defaults.js";
 import { imageUrl, safeUrl } from "../services/urls.js";
@@ -12,7 +11,6 @@ const imageFailed = ref(false);
 const bannerImage = computed(() => imageFailed.value ? "" : imageUrl(currentBanner.value.image));
 const bannerLink = computed(() => safeUrl(currentBanner.value.url));
 const active = ref(0);
-const direction = ref("next");
 const pointerInside = ref(false);
 const focusInside = ref(false);
 const userResumed = ref(false);
@@ -44,6 +42,8 @@ function onPointerLeave() {
 }
 
 onMounted(() => {
+  const skillPoster = new Image();
+  skillPoster.src = "/assets/ows-skill-cli-poster.png";
   motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
   document.addEventListener('visibilitychange', scheduleNext);
   motionPreference.addEventListener('change', scheduleNext);
@@ -57,22 +57,25 @@ onUnmounted(() => {
 
 function show(index) {
   if (index === active.value) return;
-  direction.value = index > active.value ? "next" : "previous";
   active.value = index;
   scheduleNext();
 }
 
 function move(delta, resetTimer = true) {
-  direction.value = delta > 0 ? "next" : "previous";
   active.value = (active.value + delta + 2) % 2;
   if (resetTimer) scheduleNext();
+}
+
+function onBeforeLeave(element) {
+  element.inert = true;
+  element.setAttribute("aria-hidden", "true");
 }
 </script>
 
 <template>
   <section class="home-carousel" aria-label="首页精选海报" aria-roledescription="轮播" @pointerenter="pointerInside = true; scheduleNext()" @pointerleave="onPointerLeave" @focusin="focusInside = true; scheduleNext()" @focusout="onFocusOut">
     <div class="home-carousel-stage">
-      <Transition :name="`home-slide-${direction}`">
+      <Transition name="home-ripple" @before-leave="onBeforeLeave">
         <div v-if="active === 0" key="community" class="home-carousel-slide" role="group" aria-roledescription="幻灯片" aria-label="第 1 张，共 2 张">
           <section
             class="campaign-banner"
@@ -110,11 +113,11 @@ function move(delta, resetTimer = true) {
       </Transition>
     </div>
     <div class="home-carousel-controls" aria-label="海报切换">
-      <button type="button" class="home-carousel-arrow home-carousel-arrow-previous" aria-label="上一张海报" @click="move(-1)"><Icon name="chevron-right" /></button>
+      <button type="button" class="home-carousel-arrow home-carousel-arrow-previous" aria-label="上一张海报" @click="move(-1)"><TripleArrow compact direction="left" /></button>
       <div class="home-carousel-dots">
         <button v-for="index in 2" :key="index" type="button" class="home-carousel-dot" :class="{ active: active === index - 1 }" :aria-label="`显示第 ${index} 张海报`" :aria-current="active === index - 1 ? 'true' : undefined" @click="show(index - 1)"><span></span></button>
       </div>
-      <button type="button" class="home-carousel-arrow home-carousel-arrow-next" aria-label="下一张海报" @click="move(1)"><Icon name="chevron-right" /></button>
+      <button type="button" class="home-carousel-arrow home-carousel-arrow-next" aria-label="下一张海报" @click="move(1)"><TripleArrow compact /></button>
     </div>
   </section>
 </template>
