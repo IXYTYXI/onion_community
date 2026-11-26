@@ -7,7 +7,7 @@ export function useCatalog(props, store = engagement.state) {
   const router = useRouter();
   const page = route.meta.page;
   const news = page === "news";
-  const pageSize = news ? 7 : 6;
+  const pageSize = news ? 7 : 9;
   const category = ref("全部"),
     query = ref(""),
     number = ref(1),

@@ -9,6 +9,7 @@ import Pagination from "../components/Pagination.vue";
 const props = defineProps({ state: Object, user: Object });
 const emit = defineEmits(["compose", "retry"]);
 const {
+  pageSize,
   mine,
   personal,
   collection,
@@ -150,6 +151,8 @@ const {
     <Pagination
       v-if="matches.length"
       :count="matches.length"
+      :page-size="pageSize"
+      show-first-last
       v-model="number"
     />
   </main>

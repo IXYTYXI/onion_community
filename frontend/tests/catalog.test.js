@@ -13,7 +13,27 @@ async function setup(search='', store) {
   const scope=effectScope();const catalog=app.runWithContext(()=>scope.run(()=>useCatalog(props, store)));
   return {catalog,scope,router,props};
 }
-test('catalog preserves API order, paginates, and searches all tags',async()=>{const {catalog:c,scope}=await setup();try{assert.equal(c.matches.value.length,14);assert.deepEqual(c.visible.value.map(x=>x.id),['0','1','2','3','4','5']);c.number.value=3;await nextTick();await new Promise(setImmediate);assert.equal(c.visible.value.length,2);c.query.value='案例13';await nextTick();await new Promise(setImmediate);assert.equal(c.number.value,1);assert.equal(c.visible.value[0].id,'13');c.query.value='';c.category.value='数据类';await nextTick();await new Promise(setImmediate);assert.equal(c.matches.value.length,7);}finally{scope.stop();}});
+test('catalog preserves API order across nine-item pages and searches all tags', async () => {
+  const { catalog, scope } = await setup();
+  try {
+    assert.equal(catalog.matches.value.length, 14);
+    assert.deepEqual(catalog.visible.value.map(x => x.id), ['0','1','2','3','4','5','6','7','8']);
+    catalog.number.value = 2;
+    await nextTick();
+    await new Promise(setImmediate);
+    assert.deepEqual(catalog.visible.value.map(x => x.id), ['9','10','11','12','13']);
+    catalog.query.value = '案例13';
+    await nextTick();
+    await new Promise(setImmediate);
+    assert.equal(catalog.number.value, 1);
+    assert.equal(catalog.visible.value[0].id, '13');
+    catalog.query.value = '';
+    catalog.category.value = '数据类';
+    await nextTick();
+    await new Promise(setImmediate);
+    assert.equal(catalog.matches.value.length, 7);
+  } finally { scope.stop(); }
+});
 test('mine route isolates drafts and invalid query category falls back',async()=>{const {catalog:c,scope}=await setup('?mine=1&category=unknown');try{assert.equal(c.category.value,'全部');assert.deepEqual(c.visible.value.map(x=>x.id),['local']);}finally{scope.stop();}});
 
 test('catalog follows query navigation without remounting',async()=>{
@@ -53,7 +73,7 @@ test('popular order sorts before pagination and remains stable until the next qu
   });
   const { catalog, scope } = await setup('?sort=likes', store);
   try {
-    assert.deepEqual(catalog.visible.value.map(c => c.id), ['8','9','0','1','2','3']);
+    assert.deepEqual(catalog.visible.value.map(c => c.id), ['8','9','0','1','2','3','4','5','6']);
     store.items['9'].like_count = 12;
     assert.equal(catalog.visible.value[0].id, '8');
     catalog.query.value = '案例';
@@ -62,7 +82,7 @@ test('popular order sorts before pagination and remains stable until the next qu
 });
 
 test('personal deep link survives loading, filters allowed cases and clamps after cancellation', async () => {
-  const items = Object.fromEntries(Array.from({ length: 8 }, (_, index) => [
+  const items = Object.fromEntries(Array.from({ length: 11 }, (_, index) => [
     String(index), { favorited: true, favorited_at: index, liked_at: 20 - index },
   ]));
   const store = reactive({ status: 'loading', switches: '', items: {}, snapshot: 0 });
@@ -76,7 +96,7 @@ test('personal deep link survives loading, filters allowed cases and clamps afte
     store.items['0'].favorited = false;
     await nextTick();
     assert.equal(catalog.number.value, 1);
-    assert.deepEqual(catalog.visible.value.map(c => c.id), ['7','6','5','4','3','2']);
+    assert.deepEqual(catalog.visible.value.map(c => c.id), ['10','9','8','7','6','5','4','3','2']);
     catalog.category.value = '数据类';
     catalog.query.value = '案例3';
     assert.deepEqual(catalog.visible.value.map(c => c.id), ['3']);
