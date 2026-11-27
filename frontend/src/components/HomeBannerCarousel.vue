@@ -114,68 +114,123 @@ function onBeforeLeave(element) {
         </div>
         <div v-else key="activities" class="home-carousel-slide" role="group" aria-roledescription="幻灯片" aria-label="第 3 张，共 3 张">
           <AppLink href="activities.html" class="campaign-banner campaign-activities-banner" aria-label="进入 AI 活动专区：查看近期培训、分享会与活动现场回顾">
-            <div class="campaign-grid" aria-hidden="true"></div>
-            <div class="campaign-topline">
-              <span><i></i> OWS COMMUNITY <b>/</b> AI 活动专区</span>
-              <span class="activities-banner-pill">近期报名 · 未来预告 · 往期回顾</span>
-            </div>
-            <div class="activities-banner-body">
-              <div class="campaign-copy activities-banner-copy">
-                <h1>一起动手，<br />把 AI 用进日常工作</h1>
-                <p>汇聚内部实战培训、主题分享会与工作坊，一键报名加入日程，随时回看往期课件、回放与现场精彩瞬间。</p>
-                <span class="activities-banner-cta">进入 AI 活动专区 <span><TripleArrow compact /></span></span>
-              </div>
-              <div class="activities-banner-visual" aria-hidden="true">
-                <svg viewBox="0 0 520 340" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="actCardBg" x1="40" y1="20" x2="460" y2="310" gradientUnits="userSpaceOnUse">
-                      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.96" />
-                      <stop offset="1" stop-color="#EAF3FF" stop-opacity="0.9" />
-                    </linearGradient>
-                    <linearGradient id="actAccent" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stop-color="#2A73F7" />
-                      <stop offset="1" stop-color="#154ED1" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="380" cy="155" r="138" fill="#BBD9FF" fill-opacity="0.34" />
-                  <circle cx="380" cy="155" r="102" stroke="#85B6F7" stroke-opacity="0.35" stroke-dasharray="5 6" />
-                  <rect x="58" y="38" width="320" height="206" rx="22" fill="url(#actCardBg)" stroke="#FFFFFF" stroke-width="2" />
-                  <rect x="82" y="64" width="76" height="24" rx="12" fill="#DCEBFF" />
-                  <circle cx="96" cy="76" r="4" fill="#1D67E8" />
-                  <rect x="106" y="72" width="38" height="8" rx="4" fill="#2967D8" />
-                  <rect x="82" y="104" width="210" height="16" rx="8" fill="#17386B" />
-                  <rect x="82" y="130" width="164" height="12" rx="6" fill="#6D8BB0" fill-opacity="0.65" />
-                  <rect x="82" y="154" width="136" height="12" rx="6" fill="#8BA6C6" fill-opacity="0.45" />
-                  <rect x="82" y="186" width="108" height="34" rx="10" fill="url(#actAccent)" />
-                  <rect x="102" y="199" width="68" height="8" rx="4" fill="#FFFFFF" />
-                  <rect x="202" y="186" width="96" height="34" rx="10" fill="#EDF4FF" stroke="#B7D2F8" />
-                  <rect x="222" y="199" width="56" height="8" rx="4" fill="#2364D8" />
-                  <g transform="translate(292, 92)">
-                    <rect x="0" y="0" width="184" height="126" rx="20" fill="#FFFFFF" fill-opacity="0.95" stroke="#D3E5FD" stroke-width="1.5" />
-                    <rect x="0" y="0" width="184" height="36" rx="20" fill="url(#actAccent)" />
-                    <rect x="0" y="20" width="184" height="16" fill="url(#actAccent)" />
-                    <circle cx="28" cy="18" r="4" fill="#FFFFFF" fill-opacity="0.85" />
-                    <circle cx="44" cy="18" r="4" fill="#FFFFFF" fill-opacity="0.55" />
-                    <rect x="22" y="54" width="34" height="24" rx="7" fill="#E3EFFF" />
-                    <rect x="66" y="54" width="34" height="24" rx="7" fill="#2166E8" />
-                    <rect x="110" y="54" width="34" height="24" rx="7" fill="#EDF4FF" />
-                    <rect x="22" y="86" width="34" height="22" rx="7" fill="#EDF4FF" />
-                    <rect x="66" y="86" width="34" height="22" rx="7" fill="#EDF4FF" />
-                    <rect x="110" y="86" width="34" height="22" rx="7" fill="#DCEBFF" />
-                  </g>
-                  <g transform="translate(216, 234)">
-                    <rect x="0" y="0" width="222" height="68" rx="16" fill="#FFFFFF" fill-opacity="0.94" stroke="#D6E6FC" />
-                    <circle cx="34" cy="34" r="18" fill="#E3EEFF" />
-                    <polygon points="30,26 30,42 43,34" fill="#1E64E6" />
-                    <rect x="64" y="22" width="114" height="10" rx="5" fill="#1D3E72" />
-                    <rect x="64" y="39" width="82" height="8" rx="4" fill="#7D98B8" />
-                  </g>
-                </svg>
-              </div>
-            </div>
-            <div class="campaign-baseline">
-              <span>洋葱 AI 实践社区 · 培训与分享</span><span class="campaign-issue"><i></i> AI ACTIVITIES &amp; ARCHIVE</span>
-            </div>
+            <h1 class="visually-hidden">一起动手，把 AI 用进日常工作</h1>
+            <svg class="activities-poster-svg" viewBox="0 0 1200 675" width="1200" height="675" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="actPosterBg" x1="0" y1="0" x2="1200" y2="675" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#EAF4FF" />
+                  <stop offset="0.52" stop-color="#D5E9FF" />
+                  <stop offset="1" stop-color="#B9DAFF" />
+                </linearGradient>
+                <radialGradient id="actGlowRight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(865 300) rotate(90) scale(320 410)">
+                  <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.72" />
+                  <stop offset="1" stop-color="#8FC2FF" stop-opacity="0" />
+                </radialGradient>
+                <linearGradient id="actPillBg" x1="60" y1="74" x2="340" y2="126" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#9ED4FF" stop-opacity="0.75" />
+                  <stop offset="1" stop-color="#BAE5FF" stop-opacity="0.88" />
+                </linearGradient>
+                <linearGradient id="actBtnGrad" x1="60" y1="496" x2="372" y2="574" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#0D6EFF" />
+                  <stop offset="1" stop-color="#0055DF" />
+                </linearGradient>
+                <linearGradient id="actCardGlass" x1="640" y1="120" x2="1080" y2="520" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.96" />
+                  <stop offset="1" stop-color="#E6F1FF" stop-opacity="0.92" />
+                </linearGradient>
+                <linearGradient id="actHeaderBar" x1="720" y1="195" x2="1040" y2="250" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#4896FF" />
+                  <stop offset="1" stop-color="#1E6FF5" />
+                </linearGradient>
+                <filter id="actSoftShadow" x="540" y="60" width="620" height="560" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+                  <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#1A55AD" flood-opacity="0.16" />
+                </filter>
+              </defs>
+
+              <!-- 16:9 Backdrop matching Slide 1 & Slide 2 -->
+              <rect width="1200" height="675" fill="url(#actPosterBg)" />
+              <rect width="1200" height="675" fill="url(#actGlowRight)" />
+
+              <!-- Left Typography Column (matching ows-skill-cli-poster proportions) -->
+              <rect x="60" y="74" width="286" height="52" rx="26" fill="url(#actPillBg)" />
+              <text x="203" y="108" text-anchor="middle" fill="#17468A" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="25" font-weight="700" letter-spacing="0.5">OWS AI 活动专区</text>
+
+              <text x="60" y="218" fill="#0F2C5C" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="74" font-weight="800" letter-spacing="-1.5">一起动手，</text>
+              <text x="60" y="308" fill="#0F2C5C" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="74" font-weight="800" letter-spacing="-1.5">把 AI 用进日常工作</text>
+
+              <text x="62" y="376" fill="#1D3F72" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="31" font-weight="600">实战工作坊 · 主题分享会 · 培训回顾</text>
+              <rect x="62" y="404" width="138" height="6" rx="3" fill="#4B8BFF" fill-opacity="0.72" />
+              <text x="62" y="454" fill="#23487E" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="27" font-weight="600">一键报名加入日程，随时回看课件与现场瞬间</text>
+
+              <!-- Primary Pill CTA -->
+              <g class="activities-poster-btn">
+                <rect x="60" y="498" width="312" height="76" rx="38" fill="url(#actBtnGrad)" />
+                <text x="196" y="547" text-anchor="middle" fill="#FFFFFF" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="33" font-weight="700">进入活动专区</text>
+                <path d="M308 536H332M323 526L333 536L323 546" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </g>
+
+              <text x="62" y="618" fill="#5D7BA3" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="22" font-weight="500">近期活动开放报名 · 往期回放与照片持续沉淀</text>
+
+              <!-- Right Frosted Glass 3D-inspired Illustration -->
+              <g filter="url(#actSoftShadow)">
+                <!-- Glass Pedestal Base -->
+                <ellipse cx="878" cy="548" rx="252" ry="52" fill="#D7ECFF" fill-opacity="0.88" stroke="#FFFFFF" stroke-width="3" />
+                <ellipse cx="878" cy="534" rx="226" ry="42" fill="#EDF6FF" fill-opacity="0.92" stroke="#9BC8FF" stroke-width="2" />
+
+                <!-- Orbital Glass Ring -->
+                <ellipse cx="878" cy="316" rx="258" ry="74" stroke="#85BEFF" stroke-opacity="0.55" stroke-width="14" />
+                <ellipse cx="878" cy="316" rx="258" ry="74" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="3" />
+
+                <!-- Left Tilted Schedule Card -->
+                <g transform="translate(648 110) rotate(-9)">
+                  <rect width="184" height="224" rx="22" fill="url(#actCardGlass)" stroke="#FFFFFF" stroke-width="3" />
+                  <circle cx="142" cy="42" r="22" fill="#1670FF" />
+                  <rect x="132" y="34" width="20" height="16" rx="3" stroke="#FFFFFF" stroke-width="2.5" />
+                  <path d="M137 30V36M147 30V36M132 40H152" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" />
+                  <rect x="24" y="48" width="84" height="14" rx="7" fill="#9BC2F9" />
+                  <rect x="24" y="76" width="128" height="14" rx="7" fill="#77AAF5" />
+                  <rect x="24" y="110" width="136" height="11" rx="5.5" fill="#C7DDFB" />
+                  <rect x="24" y="134" width="118" height="11" rx="5.5" fill="#D5E6FC" />
+                  <rect x="24" y="158" width="96" height="11" rx="5.5" fill="#DCEBFE" />
+                </g>
+
+                <!-- Right Tilted Photo Archive Card -->
+                <g transform="translate(946 86) rotate(10)">
+                  <rect width="184" height="224" rx="22" fill="url(#actCardGlass)" stroke="#FFFFFF" stroke-width="3" />
+                  <circle cx="142" cy="42" r="22" fill="#1670FF" />
+                  <circle cx="142" cy="43" r="6" stroke="#FFFFFF" stroke-width="2.4" />
+                  <rect x="130" y="34" width="24" height="18" rx="4" stroke="#FFFFFF" stroke-width="2.2" />
+                  <rect x="24" y="50" width="90" height="14" rx="7" fill="#9BC2F9" />
+                  <rect x="24" y="82" width="136" height="78" rx="12" fill="#CFE4FF" />
+                  <circle cx="56" cy="108" r="10" fill="#7AB2FA" />
+                  <path d="M34 150L72 118L102 142L124 124L150 150H34Z" fill="#468FF7" fill-opacity="0.78" />
+                  <rect x="24" y="176" width="110" height="12" rx="6" fill="#C8DFFB" />
+                </g>
+
+                <!-- Center Featured Live Workshop Window -->
+                <g transform="translate(724 196)">
+                  <rect width="312" height="214" rx="24" fill="url(#actCardGlass)" stroke="#FFFFFF" stroke-width="3.5" />
+                  <path d="M0 24C0 10.7452 10.7452 0 24 0H288C301.255 0 312 10.7452 312 24V50H0V24Z" fill="url(#actHeaderBar)" />
+                  <circle cx="28" cy="25" r="6.5" fill="#FF7A85" />
+                  <circle cx="48" cy="25" r="6.5" fill="#FFD166" />
+                  <circle cx="68" cy="25" r="6.5" fill="#5CE1A6" />
+                  <rect x="28" y="78" width="76" height="76" rx="20" fill="#1570FF" />
+                  <polygon points="56,100 56,132 84,116" fill="#FFFFFF" />
+                  <rect x="124" y="84" width="152" height="18" rx="9" fill="#9CC2F8" />
+                  <rect x="124" y="116" width="120" height="16" rx="8" fill="#BCD6FB" />
+                  <rect x="28" y="170" width="248" height="18" rx="9" fill="#B2CFF9" />
+                </g>
+
+                <!-- Lower Ticket / Signup Badge on Pedestal -->
+                <g transform="translate(716 446)">
+                  <rect width="326" height="84" rx="22" fill="#FFFFFF" fill-opacity="0.96" stroke="#B6D6FF" stroke-width="2.5" />
+                  <rect x="20" y="18" width="118" height="48" rx="14" fill="#1368F6" />
+                  <text x="79" y="50" text-anchor="middle" fill="#FFFFFF" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="22" font-weight="700">点击报名</text>
+                  <rect x="152" y="18" width="154" height="48" rx="14" fill="#EAF3FF" stroke="#8ABAF9" stroke-width="2" />
+                  <text x="229" y="50" text-anchor="middle" fill="#1859C9" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif" font-size="22" font-weight="700">+ 加入日程</text>
+                </g>
+              </g>
+            </svg>
           </AppLink>
         </div>
       </Transition>
