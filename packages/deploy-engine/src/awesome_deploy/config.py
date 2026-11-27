@@ -17,6 +17,7 @@ class Settings:
     git_hosts: tuple[str, ...] = ("github.com", "gitlab.com")
     git_askpass: str | None = None
     git_proxy_url: str | None = None
+    git_no_proxy_hosts: tuple[str, ...] = ()
     git_timeout: int = 120
     port_start: int = 20000
     port_end: int = 29999
@@ -133,6 +134,17 @@ def validate_storage_settings(settings: Settings) -> None:
 
 def validate_git_proxy_settings(settings: Settings) -> None:
     """Accept only explicit, unauthenticated operator proxy endpoints."""
+    if not isinstance(settings.git_no_proxy_hosts, tuple) or any(
+        not isinstance(host, str)
+        or not host
+        or len(host) > 253
+        or any(
+            not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+            for label in host.split(".")
+        )
+        for host in settings.git_no_proxy_hosts
+    ):
+        raise ValueError("Git no-proxy hosts")
     value = settings.git_proxy_url
     if value is None:
         return

@@ -61,11 +61,26 @@ class DeploymentService:
             or base.feishu_eligibility_mode not in ("continuous", "app_visibility")
         ):
             raise ValueError("部署引擎身份必须与社区一致，并启用 continuous 或 app_visibility 资格校验")
+        merged_git_hosts = tuple(
+            dict.fromkeys(
+                [*base.git_hosts, *(h.strip().lower() for h in settings.deploy_git_hosts_extra if h and h.strip())]
+            )
+        )
+        merged_no_proxy_hosts = tuple(
+            dict.fromkeys(
+                [
+                    *base.git_no_proxy_hosts,
+                    *(h.strip().lower() for h in settings.deploy_git_no_proxy_hosts if h and h.strip()),
+                ]
+            )
+        )
         self.engine = replace(
             base,
             auth_mode="feishu",
             feishu_app_id=settings.feishu_app_id,
             feishu_tenant_key=tenant,
+            git_hosts=merged_git_hosts,
+            git_no_proxy_hosts=merged_no_proxy_hosts,
         )
         if (
             base.port_start <= settings.port <= base.port_end

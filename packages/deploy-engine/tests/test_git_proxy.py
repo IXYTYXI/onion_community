@@ -231,3 +231,30 @@ def test_real_git_connects_only_to_configured_local_proxy_and_fails_closed(tmp_p
         assert not thread.is_alive()
     assert not failures
     assert requests == [b"CONNECT github.com:443 HTTP/1.1"]
+
+
+def test_no_proxy_hosts_bypass_proxy_for_internal_gitlab_while_github_keeps_proxy(tmp_path):
+    runner = FakeRunner()
+    settings = Settings(
+        state_dir=tmp_path,
+        git_hosts=("github.com", "gitlab.yc345.tv"),
+        git_proxy_url=PROXY,
+        git_no_proxy_hosts=("gitlab.yc345.tv",),
+    )
+    source = GitSource(settings, runner=runner)
+    source.inspect("https://github.com/example/demo", "main")
+    gh_fetch = [call for call in runner.calls if "fetch" in call[0]][0]
+    assert PROXY_ARG in gh_fetch[0]
+    assert gh_fetch[1]["env"].get(PROXY_ENV) == PROXY
+
+    runner.calls.clear()
+    source.inspect("https://gitlab.yc345.tv/fengyang1/demo.git", "main")
+    gl_fetch = [call for call in runner.calls if "fetch" in call[0]][0]
+    assert PROXY_ARG not in gl_fetch[0]
+    assert PROXY_ENV not in gl_fetch[1]["env"]
+
+    bad_cfg = tmp_path / "bad.json"
+    bad_cfg.write_text(json.dumps({"git_no_proxy_hosts": ["https://gitlab.yc345.tv"]}))
+    with pytest.raises(DeployError) as raised:
+        load_settings(bad_cfg)
+    assert raised.value.code == "INVALID_CONFIG"

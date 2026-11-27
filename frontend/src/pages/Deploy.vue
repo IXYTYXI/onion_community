@@ -68,17 +68,15 @@ const draftApps = computed(() =>
 const shortRepository = computed(() => {
   const raw = form.repository.trim();
   if (!raw || errors.value[1]) return "";
-  try {
-    const u = new URL(raw);
-    return u.pathname.replace(/^\/+|\.git$|\/+$/g, "");
-  } catch {
-    return raw;
-  }
+  return shortRepoText(raw);
 });
 
 function shortRepoText(url) {
   try {
-    return new URL(url).pathname.replace(/^\/+|\.git$|\/+$/g, "");
+    const u = new URL(url);
+    const slug = u.pathname.replace(/^\/+|\.git$|\/+$/g, "");
+    const host = u.hostname.toLowerCase();
+    return host === "github.com" ? slug : `${host}/${slug}`;
   } catch {
     return url || "";
   }
@@ -472,15 +470,15 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
                     required
                     autocomplete="off"
                     spellcheck="false"
-                    placeholder="https://github.com/team/project.git"
+                    placeholder="https://gitlab.yc345.tv/group/project.git 或 https://github.com/team/project.git"
                     :aria-invalid="touched[1] && !!errors[1]"
                     aria-describedby="repository-help repository-error"
                     @blur="touched[1] = true"
                   />
                 </div>
                 <p id="repository-help" class="field-help">
-                  默认部署 <code>main</code> 分支，无需填写版本。支持自建 GitLab
-                  仓库。
+                  默认部署 <code>main</code> 分支，无需填写版本。同时支持内网
+                  GitLab（<code>gitlab.yc345.tv</code>）与公网 GitHub（<code>github.com</code>）仓库。
                 </p>
                 <p id="repository-error" class="field-error" role="alert">
                   {{ touched[1] ? errors[1] : "" }}

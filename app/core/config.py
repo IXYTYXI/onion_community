@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     deploy_allowed_users: list[str] = []
     deploy_apps_table_id: str = ""
     deploy_jobs_table_id: str = ""
+    deploy_git_hosts_extra: list[str] = ["gitlab.yc345.tv"]
+    deploy_git_no_proxy_hosts: list[str] = ["gitlab.yc345.tv"]
 
     @property
     def feishu_redirect_uri(self) -> str:

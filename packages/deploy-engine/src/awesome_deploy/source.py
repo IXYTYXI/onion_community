@@ -115,6 +115,23 @@ def _bounded_run(args, *, cwd, env, timeout, budget_path=None, budget_bytes=None
         proc.stderr.close()
 
 
+def _network_target_host(args) -> str:
+    for token in args:
+        if isinstance(token, str) and token.startswith(("https://", "http://")):
+            return (urlsplit(token).hostname or "").lower()
+    return ""
+
+
+def _should_bypass_proxy(host: str, no_proxy_hosts: tuple[str, ...]) -> bool:
+    if not host or not no_proxy_hosts:
+        return False
+    for pattern in no_proxy_hosts:
+        entry = pattern.lower().lstrip(".")
+        if entry and (host == entry or host.endswith("." + entry)):
+            return True
+    return False
+
+
 class GitSource:
     """Snapshot provider. runner is injectable for isolated transport tests only.
 
@@ -164,8 +181,10 @@ class GitSource:
         if self.settings.git_proxy_url is not None and args[command_index:command_index + 1] in (
             ["fetch"], ["ls-remote"],
         ):
-            env["AWESOME_DEPLOY_GIT_PROXY_URL"] = self.settings.git_proxy_url
-            command.append("--config-env=http.proxy=AWESOME_DEPLOY_GIT_PROXY_URL")
+            target_host = _network_target_host(args[command_index + 1:])
+            if not _should_bypass_proxy(target_host, self.settings.git_no_proxy_hosts):
+                env["AWESOME_DEPLOY_GIT_PROXY_URL"] = self.settings.git_proxy_url
+                command.append("--config-env=http.proxy=AWESOME_DEPLOY_GIT_PROXY_URL")
         command.extend(args)
         try:
             result = self.runner(command, cwd=git_dir.parent, env=env, timeout=self.settings.git_timeout,

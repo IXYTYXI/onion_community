@@ -779,3 +779,61 @@ def test_list_jobs_marks_personal_ownership_and_excludes_superseded_app_updates(
     assert admin_list[old_job["id"]]["mine"] is False
     assert admin_list[old_job["id"]]["appOnline"] is False
     assert admin_list[old_job["id"]]["appUpdatable"] is False
+
+
+def test_community_service_supports_both_github_and_internal_gitlab_with_proxy_bypass(deploy):
+    from awesome_deploy.source import validate_repository
+
+    assert "github.com" in deploy.engine.git_hosts
+    assert "gitlab.yc345.tv" in deploy.engine.git_hosts
+    assert "gitlab.yc345.tv" in deploy.engine.git_no_proxy_hosts
+    assert (
+        validate_repository("https://gitlab.yc345.tv/fengyang1/owsc", deploy.engine)
+        == "https://gitlab.yc345.tv/fengyang1/owsc.git"
+    )
+    assert (
+        validate_repository("https://github.com/IXYTYXI/onion_community", deploy.engine)
+        == "https://github.com/IXYTYXI/onion_community.git"
+    )
+
+
+def test_git_askpass_helper_is_strictly_scoped_to_internal_gitlab(tmp_path):
+    import subprocess
+    from app.core.config import PROJECT_ROOT
+
+    script = (PROJECT_ROOT / "deploy/deployment/git-askpass.sh").read_text(encoding="utf-8")
+    token_file = tmp_path / "gitlab-git-token"
+    token_file.write_text("glpat-test-readonly-token\n", encoding="utf-8")
+    local_script = tmp_path / "git-askpass.sh"
+    local_script.write_text(
+        script.replace("/etc/awesome-deploy/gitlab-git-token", str(token_file)),
+        encoding="utf-8",
+    )
+    local_script.chmod(0o755)
+
+    gh = subprocess.run(
+        [str(local_script), "Password for 'https://oauth2@github.com': "],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert gh.returncode != 0
+    assert gh.stdout == ""
+
+    gl_user = subprocess.run(
+        [str(local_script), "Username for 'https://gitlab.yc345.tv': "],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert gl_user.returncode == 0
+    assert gl_user.stdout.strip() == "oauth2"
+
+    gl_pass = subprocess.run(
+        [str(local_script), "Password for 'https://oauth2@gitlab.yc345.tv': "],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert gl_pass.returncode == 0
+    assert gl_pass.stdout.strip() == "glpat-test-readonly-token"

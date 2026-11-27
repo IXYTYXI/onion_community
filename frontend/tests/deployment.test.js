@@ -306,3 +306,15 @@ test("applications deduplicate subdomains, hide offline apps, and isolate person
     ["upic", "test", "vibevot"],
   );
 });
+
+test("repository allowlist accepts both GitHub and internal GitLab while rejecting unknown hosts", () => {
+  const w = useDeployment();
+  assert.ok(w.options.value.gitHosts.includes("github.com"));
+  assert.ok(w.options.value.gitHosts.includes("gitlab.yc345.tv"));
+  w.form.repository = "https://gitlab.yc345.tv/fengyang1/owsc.git";
+  assert.equal(w.errors.value[1], "");
+  w.form.repository = "https://github.com/IXYTYXI/onion_community.git";
+  assert.equal(w.errors.value[1], "");
+  w.form.repository = "https://unknown.example.com/team/repo.git";
+  assert.match(w.errors.value[1], /gitlab\.yc345\.tv/);
+});

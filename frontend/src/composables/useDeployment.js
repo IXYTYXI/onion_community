@@ -20,7 +20,7 @@ export function projectNameError(value) {
   return "";
 }
 
-export function repositoryError(value) {
+export function repositoryError(value, allowedHosts = null) {
   if (!value.trim()) return "请填写 GitHub / GitLab 仓库地址。";
   try {
     const url = new URL(value.trim());
@@ -41,11 +41,18 @@ export function repositoryError(value) {
       )
     )
       throw new Error();
+    const host = url.hostname.toLowerCase();
     // GitLab may be self-hosted and may use nested groups. Verify syntax only here.
-    if (url.hostname === "github.com" && parts.length !== 2) throw new Error();
+    if (host === "github.com" && parts.length !== 2) throw new Error();
+    if (Array.isArray(allowedHosts) && allowedHosts.length > 0) {
+      const normalized = allowedHosts.map((item) => String(item).toLowerCase());
+      if (!normalized.includes(host)) {
+        return `当前平台仅支持 ${allowedHosts.join(" / ")} 的 HTTPS 仓库地址。`;
+      }
+    }
     return "";
   } catch {
-    return "请输入完整的 HTTPS 仓库地址，例如 https://github.com/team/project.git。";
+    return "请输入完整的 HTTPS 仓库地址，例如 https://gitlab.yc345.tv/group/project.git 或 https://github.com/team/project.git。";
   }
 }
 
@@ -59,6 +66,7 @@ export function useDeployment() {
   const options = ref({
     executionEnabled: false,
     baseDomain: "awesome.guanghexinzhi.cn",
+    gitHosts: ["github.com", "gitlab.com", "gitlab.yc345.tv"],
   });
   let timer,
     controller,
@@ -243,7 +251,7 @@ export function useDeployment() {
     applications.value.some((item) => item.appId === form.application)
       ? ""
       : "请选择有效应用。",
-    repositoryError(form.repository),
+    repositoryError(form.repository, options.value.gitHosts),
     !preflight.value ? "请先检查仓库配置。" :
       preflight.value.canPreconfigure
         ? (preflight.value.items.find((item) => item.state === "unavailable")

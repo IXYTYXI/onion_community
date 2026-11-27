@@ -67,6 +67,16 @@ def load_settings(path: Path | None) -> Settings:
         ) for label in host.split(".")) for host in hosts):
             raise DeployError("INVALID_CONFIG", "git_hosts 必须仅包含主机名，不含协议、路径或端口。")
         values["git_hosts"] = hosts
+    if "git_no_proxy_hosts" in values:
+        raw_bypass = values["git_no_proxy_hosts"]
+        if not isinstance(raw_bypass, list) or not all(is_nonempty_text(v) for v in raw_bypass):
+            raise DeployError("INVALID_CONFIG", "git_no_proxy_hosts 必须是主机名数组。")
+        bypass = tuple(host.lower() for host in raw_bypass)
+        if any(len(host) > 253 or any(not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label
+        ) for label in host.split(".")) for host in bypass):
+            raise DeployError("INVALID_CONFIG", "git_no_proxy_hosts 必须仅包含主机名，不含协议、路径或端口。")
+        values["git_no_proxy_hosts"] = bypass
     for key in ("runtime_dns", "runtime_blocked_ips"):
         if key in values:
             if not isinstance(values[key], list) or not all(isinstance(v, str) for v in values[key]):
