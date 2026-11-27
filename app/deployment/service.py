@@ -328,9 +328,139 @@ class DeploymentService:
             job = self.store.enqueue(payload, key, actor=actor)
         return self.project_job(job)
 
-    def project_job(self, job):
-        active = self.store.active_release(job["app_id"]) if job.get("app_id") else None
+    def _app_context(self, jobs, *, actor=None):
+        app_ids = sorted({j["app_id"] for j in jobs if j.get("app_id")})
+        job_ids = sorted({j["id"] for j in jobs if j.get("id")})
+        actor_id = actor.get("id") if isinstance(actor, dict) else None
+        with self.store._connection() as db:
+            member_apps = set()
+            actor_jobs = set()
+            if actor_id:
+                member_apps = {
+                    r[0]
+                    for r in db.execute(
+                        "SELECT app_id FROM app_members WHERE user_id=? AND enabled=1 AND role IN ('owner','maintainer')",
+                        (actor_id,),
+                    )
+                }
+                if job_ids:
+                    q_jobs = ",".join("?" for _ in job_ids)
+                    actor_jobs = {
+                        r[0]
+                        for r in db.execute(
+                            f"SELECT id FROM operation_auth WHERE kind='job' AND user_id=? AND id IN ({q_jobs})",
+                            (actor_id, *job_ids),
+                        )
+                    }
+            if not app_ids:
+                return {}, member_apps, actor_jobs
+
+            q_apps = ",".join("?" for _ in app_ids)
+            apps_by_id = {
+                r["id"]: dict(r)
+                for r in db.execute(
+                    f"SELECT id, subdomain, active_release_id FROM apps WHERE id IN ({q_apps})",
+                    app_ids,
+                )
+            }
+            live_domain_owner = {
+                r["subdomain"]: r["id"]
+                for r in db.execute("SELECT id, subdomain FROM apps WHERE subdomain IS NOT NULL")
+            }
+            community_names = {
+                r["name"]: r["app_id"]
+                for r in db.execute("SELECT name, app_id FROM community_names")
+            }
+            job_stats = {
+                r["app_id"]: dict(r)
+                for r in db.execute(
+                    f"""SELECT app_id,
+                               MAX(created_at) AS last_job,
+                               MAX(CASE WHEN status='succeeded' THEN 1 ELSE 0 END) AS ever_succeeded,
+                               (SELECT json_extract(j2.input, '$.subdomain')
+                                FROM jobs j2 WHERE j2.app_id=jobs.app_id
+                                ORDER BY j2.created_at DESC, j2.id DESC LIMIT 1) AS last_subdomain
+                        FROM jobs WHERE app_id IN ({q_apps}) GROUP BY app_id""",
+                    app_ids,
+                )
+            }
+            offline_by_app = {
+                r["app_id"]: r["last_offline"]
+                for r in db.execute(
+                    f"""SELECT app_id, MAX(updated_at) AS last_offline
+                        FROM offline_operations
+                        WHERE status='succeeded' AND app_id IN ({q_apps})
+                        GROUP BY app_id""",
+                    app_ids,
+                )
+            }
+            owners_by_app = {
+                r["app_id"]: r["name"] or ""
+                for r in db.execute(
+                    f"""SELECT a.app_id, u.name
+                        FROM app_access a
+                        LEFT JOIN auth_users u ON u.id=a.owner_id
+                        WHERE a.app_id IN ({q_apps})""",
+                    app_ids,
+                )
+            }
+
+        meta = {}
+        for app_id in app_ids:
+            app_row = apps_by_id.get(app_id)
+            stats = job_stats.get(app_id, {})
+            if not app_row:
+                meta[app_id] = {
+                    "ownerName": "",
+                    "appOnline": False,
+                    "appUpdatable": False,
+                    "everSucceeded": False,
+                }
+                continue
+            online = bool(app_row["active_release_id"])
+            ever_succeeded = online or bool(stats.get("ever_succeeded"))
+            target_name = app_row["subdomain"] or stats.get("last_subdomain") or ""
+            claimed_by = community_names.get(target_name) or live_domain_owner.get(target_name)
+            superseded = bool(claimed_by and claimed_by != app_id)
+            last_off = offline_by_app.get(app_id)
+            last_job = stats.get("last_job")
+            taken_offline = (
+                (not online)
+                and (last_off is not None)
+                and (last_job is None or last_off >= last_job)
+            )
+            meta[app_id] = {
+                "ownerName": owners_by_app.get(app_id, ""),
+                "appOnline": online,
+                "appUpdatable": (not superseded) and (not taken_offline),
+                "everSucceeded": ever_succeeded,
+            }
+        return meta, member_apps, actor_jobs
+
+    def attach_actor_scope(self, projected, raw_job, actor):
+        meta, member_apps, actor_jobs = self._app_context([raw_job], actor=actor)
+        app_id = raw_job.get("app_id")
+        app_info = meta.get(app_id, {}) if app_id else {}
+        mine = (
+            True
+            if actor is None
+            else bool((app_id and app_id in member_apps) or raw_job.get("id") in actor_jobs)
+        )
         return {
+            **projected,
+            "mine": mine,
+            "ownerName": app_info.get("ownerName", projected.get("ownerName", "")),
+            "appOnline": app_info.get("appOnline", projected.get("appOnline", False)),
+            "appUpdatable": app_info.get("appUpdatable", projected.get("appUpdatable", bool(app_id))),
+            "everSucceeded": app_info.get(
+                "everSucceeded",
+                projected.get("everSucceeded", projected.get("status") == "succeeded"),
+            ),
+        }
+
+    def project_job(self, job, *, actor=None, _context=None):
+        active = self.store.active_release(job["app_id"]) if job.get("app_id") else None
+        base = {
             "id": job["id"],
             "appId": job["app_id"],
             "status": job["status"],
@@ -353,12 +483,30 @@ class DeploymentService:
             if job.get("error")
             else None,
         }
+        if _context is None:
+            _context = self._app_context([job], actor=actor)
+        meta, member_apps, actor_jobs = _context
+        app_id = job.get("app_id")
+        app_info = meta.get(app_id, {}) if app_id else {}
+        mine = (
+            True
+            if actor is None
+            else bool((app_id and app_id in member_apps) or job.get("id") in actor_jobs)
+        )
+        return {
+            **base,
+            "mine": mine,
+            "ownerName": app_info.get("ownerName", ""),
+            "appOnline": app_info.get("appOnline", False),
+            "appUpdatable": app_info.get("appUpdatable", bool(app_id)),
+            "everSucceeded": app_info.get("everSucceeded", base["status"] == "succeeded"),
+        }
 
     def get_job(self, user, job_id):
         actor = self.actor(user)
         job = self.store.get(job_id)
         self.access.require_job(actor, job)
-        return self.project_job(job)
+        return self.project_job(job, actor=actor)
 
     def secret_requirements(self, user, job_id):
         return self.secrets.describe(job_id, actor=self.actor(user))
@@ -367,9 +515,30 @@ class DeploymentService:
         return self.secrets.save(job_id, values, actor=self.actor(user))
 
     def list_jobs(self, user):
-        return [
-            self.project_job(j) for j in self.store.list_jobs(actor=self.actor(user))
-        ]
+        actor = self.actor(user)
+        rows = self.store.list_jobs(limit=200, actor=actor)
+        seen_ids = {j["id"] for j in rows}
+        # Guarantee the actor's own latest job per app is never pushed out by global noise.
+        if actor.get("is_admin"):
+            with self.store._connection() as db:
+                extra_rows = db.execute(
+                    """SELECT j.* FROM jobs j
+                       WHERE j.id IN (
+                           SELECT (SELECT j2.id FROM jobs j2 WHERE j2.app_id=m.app_id
+                                   ORDER BY j2.created_at DESC, j2.id DESC LIMIT 1)
+                           FROM app_members m
+                           WHERE m.user_id=? AND m.enabled=1 AND m.role IN ('owner','maintainer')
+                       ) ORDER BY j.created_at DESC, j.id DESC""",
+                    (actor["id"],),
+                ).fetchall()
+            for r in extra_rows:
+                item = self.store._job(r)
+                if item["id"] not in seen_ids:
+                    rows.append(item)
+                    seen_ids.add(item["id"])
+            rows.sort(key=lambda item: (item["created_at"], item["id"]), reverse=True)
+        context = self._app_context(rows, actor=actor)
+        return [self.project_job(j, actor=actor, _context=context) for j in rows]
 
     def snapshot(self, kind, entity_id):
         if kind == "job":

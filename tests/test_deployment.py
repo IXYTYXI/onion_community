@@ -739,3 +739,43 @@ def test_legacy_name_migration_respects_current_binding_and_completed_offline(de
         migrated = CommunityDeploymentStore(deploy.engine)
         with migrated._connection() as db:
             assert db.execute("SELECT app_id FROM community_names WHERE name='demo'").fetchone()[0] == 'new-app'
+
+
+def test_list_jobs_marks_personal_ownership_and_excludes_superseded_app_updates(deploy):
+    owner_user = person(1)
+    admin_user = person(2)
+    owner_actor = deploy.actor(owner_user)
+    admin_actor = deploy.actor(admin_user)
+    deploy.identity.set_user(admin_actor["id"], is_admin=True)
+
+    # Person 1 creates 'upic', which goes online, then goes offline, and Person 2 creates a new 'upic'.
+    old_job = deploy.store.enqueue(
+        {"repository": "https://github.com/team/upic.git", "subdomain": "upic", "ref": "main"},
+        "upic-old",
+        actor=owner_actor,
+    )
+    terminal_state(deploy, old_job["id"], status="succeeded")
+    with deploy.store._connection(write=True) as db:
+        db.execute(
+            "INSERT INTO offline_operations(id,idempotency_key,app_id,target_release_id,status,phase,created_at,updated_at) "
+            "VALUES('off-upic','off-upic-k',?,?,'succeeded','complete',9999999999,9999999999)",
+            (old_job["app_id"], old_job["id"]),
+        )
+        db.execute("DELETE FROM community_names WHERE name='upic'")
+
+    new_job = deploy.store.enqueue(
+        {"repository": "https://github.com/team/upic2.git", "subdomain": "upic", "ref": "main"},
+        "upic-new",
+        actor=deploy.actor(admin_user),
+    )
+    terminal_state(deploy, new_job["id"], status="succeeded")
+    with deploy.store._connection(write=True) as db:
+        db.execute("UPDATE apps SET subdomain='upic', active_release_id=? WHERE id=?", (new_job["id"], new_job["app_id"]))
+
+    admin_list = {item["id"]: item for item in deploy.list_jobs(admin_user)}
+    assert admin_list[new_job["id"]]["mine"] is True
+    assert admin_list[new_job["id"]]["appOnline"] is True
+    assert admin_list[new_job["id"]]["appUpdatable"] is True
+    assert admin_list[old_job["id"]]["mine"] is False
+    assert admin_list[old_job["id"]]["appOnline"] is False
+    assert admin_list[old_job["id"]]["appUpdatable"] is False

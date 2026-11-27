@@ -282,3 +282,27 @@ test("existing application options retain the latest task", () => {
   ];
   assert.equal(w.applications.value[0].id, "new");
 });
+
+test("applications deduplicate subdomains, hide offline apps, and isolate personal scope by default", () => {
+  const w = useDeployment();
+  w.history.value = [
+    { id: "other-fail", appId: "app-other", subdomain: "vibevot", mine: false, appOnline: false, appUpdatable: true, everSucceeded: false, updatedAt: 500 },
+    { id: "upic-live", appId: "app-upic-2", subdomain: "upic", mine: true, appOnline: true, appUpdatable: true, everSucceeded: true, updatedAt: 400 },
+    { id: "upic-old-offline", appId: "app-upic-1", subdomain: "upic", mine: true, appOnline: false, appUpdatable: false, everSucceeded: true, updatedAt: 300 },
+    { id: "test-dup-1", appId: "app-test-2", subdomain: "test", mine: true, appOnline: true, appUpdatable: true, everSucceeded: true, updatedAt: 200 },
+    { id: "test-dup-0", appId: "app-test-1", subdomain: "test", mine: true, appOnline: false, appUpdatable: true, everSucceeded: false, updatedAt: 250 },
+  ];
+  assert.equal(w.hasOtherUsersRecords.value, true);
+  assert.deepEqual(
+    w.applications.value.map((item) => [item.appId, item.subdomain]),
+    [
+      ["app-upic-2", "upic"],
+      ["app-test-2", "test"],
+    ],
+  );
+  w.scopeMode.value = "all";
+  assert.deepEqual(
+    w.applications.value.map((item) => item.subdomain),
+    ["upic", "test", "vibevot"],
+  );
+});

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import PageBreadcrumb from "../components/PageBreadcrumb.vue";
 import DeploymentActivity from "../components/deployment/DeploymentActivity.vue";
@@ -24,11 +24,103 @@ const {
   applications,
   preflight,
   secretValues,
+  scopeMode,
+  hasOtherUsersRecords,
 } = useDeployment();
 const steps = ["选择应用", "连接仓库", "配置运行密钥", "项目名称", "确认部署"];
 const stepTitle = ref(null);
 const wizard = ref(null);
 const secretFields = ref(null);
+const pickerWrap = ref(null);
+const pickerSearchInput = ref(null);
+const dropdownOpen = ref(false);
+const showDraftApps = ref(false);
+const appSearch = ref("");
+
+const selectedApp = computed(() =>
+  form.application === "create"
+    ? null
+    : applications.value.find((item) => item.appId === form.application) || null,
+);
+
+const isUnpublishedDraft = (app) =>
+  app.appOnline === false && app.everSucceeded === false && app.status === "failed";
+
+const filteredApps = computed(() => {
+  const q = appSearch.value.trim().toLowerCase();
+  if (!q) return applications.value;
+  return applications.value.filter(
+    (app) =>
+      (app.subdomain || "").toLowerCase().includes(q) ||
+      (app.repository || "").toLowerCase().includes(q) ||
+      (app.ownerName || "").toLowerCase().includes(q),
+  );
+});
+
+const primaryApps = computed(() =>
+  filteredApps.value.filter((app) => !isUnpublishedDraft(app)),
+);
+
+const draftApps = computed(() =>
+  filteredApps.value.filter((app) => isUnpublishedDraft(app)),
+);
+
+const shortRepository = computed(() => {
+  const raw = form.repository.trim();
+  if (!raw || errors.value[1]) return "";
+  try {
+    const u = new URL(raw);
+    return u.pathname.replace(/^\/+|\.git$|\/+$/g, "");
+  } catch {
+    return raw;
+  }
+});
+
+function shortRepoText(url) {
+  try {
+    return new URL(url).pathname.replace(/^\/+|\.git$|\/+$/g, "");
+  } catch {
+    return url || "";
+  }
+}
+
+function toggleDropdown() {
+  dropdownOpen.value = !dropdownOpen.value;
+  if (dropdownOpen.value) {
+    appSearch.value = "";
+    if (selectedApp.value && isUnpublishedDraft(selectedApp.value)) {
+      showDraftApps.value = true;
+    }
+    nextTick(() => pickerSearchInput.value?.focus());
+  }
+}
+
+function chooseApplication(value) {
+  form.application = value;
+  if (value === "create") {
+    form.repository = "";
+    form.name = "";
+  }
+  dropdownOpen.value = false;
+}
+
+function onDocumentPointerDown(event) {
+  if (dropdownOpen.value && pickerWrap.value && !pickerWrap.value.contains(event.target)) {
+    dropdownOpen.value = false;
+  }
+}
+
+function onPickerKeydown(event) {
+  if (event.key === "Escape" && dropdownOpen.value) {
+    event.stopPropagation();
+    dropdownOpen.value = false;
+  }
+}
+
+watch(step, () => {
+  dropdownOpen.value = false;
+});
+
 function revealStep() {
   stepTitle.value?.focus({ preventScroll: true });
   wizard.value?.scrollIntoView({
@@ -59,8 +151,14 @@ function beforeUnload(event) {
   event.preventDefault();
   event.returnValue = "";
 }
-onMounted(() => window.addEventListener("beforeunload", beforeUnload));
-onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
+onMounted(() => {
+  window.addEventListener("beforeunload", beforeUnload);
+  document.addEventListener("pointerdown", onDocumentPointerDown);
+});
+onUnmounted(() => {
+  window.removeEventListener("beforeunload", beforeUnload);
+  document.removeEventListener("pointerdown", onDocumentPointerDown);
+});
 onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写的密钥尚未提交，离开后需要重新填写。确定离开吗？"));
 </script>
 
@@ -173,28 +271,161 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
               </div>
               <h2 ref="stepTitle" tabindex="-1">{{ steps[step] }}</h2>
               <template v-if="step === 0">
-                <p class="step-description">选择本次部署的应用。</p>
-                <label for="deploy-application"
-                  >应用 <span class="required-star">*</span></label
-                >
-                <div class="deploy-select">
-                  <select
+                <p class="step-description">选择本次部署要创建新应用，或更新已有的线上应用。</p>
+                <div class="field-label-row">
+                  <label id="deploy-application-label" for="deploy-application">
+                    应用 <span class="required-star">*</span>
+                  </label>
+                  <div v-if="hasOtherUsersRecords" class="scope-pills" role="group" aria-label="应用归属范围">
+                    <button
+                      type="button"
+                      :class="{ active: scopeMode === 'mine' }"
+                      @click="scopeMode = 'mine'"
+                    >
+                      我的应用
+                    </button>
+                    <button
+                      type="button"
+                      :class="{ active: scopeMode === 'all' }"
+                      @click="scopeMode = 'all'"
+                    >
+                      全平台
+                    </button>
+                  </div>
+                </div>
+
+                <div ref="pickerWrap" class="deploy-app-picker" @keydown="onPickerKeydown">
+                  <button
                     id="deploy-application"
-                    v-model="form.application"
-                    required
+                    type="button"
+                    class="app-picker-trigger"
+                    :class="{ open: dropdownOpen }"
+                    role="combobox"
+                    aria-labelledby="deploy-application-label"
+                    aria-haspopup="listbox"
+                    :aria-expanded="dropdownOpen"
                     :aria-invalid="!!errors[0]"
                     aria-describedby="application-error"
+                    @click="toggleDropdown"
                   >
-                    <option value="create">创建新应用</option>
-                    <option
-                      v-for="app in applications"
-                      :key="app.appId"
-                      :value="app.appId"
-                    >
-                      更新 {{ app.subdomain }}
-                    </option></select
-                  ><TripleArrow compact direction="down" />
+                    <span class="trigger-leading" :class="{ 'is-existing': !!selectedApp }">
+                      <Icon :name="selectedApp ? 'rocket' : 'plus'" />
+                    </span>
+                    <span class="trigger-copy">
+                      <strong>{{ selectedApp ? `更新 ${selectedApp.subdomain}` : "创建新应用" }}</strong>
+                      <small v-if="selectedApp">
+                        {{ selectedApp.subdomain }}.{{ options.baseDomain }}
+                      </small>
+                      <small v-else>分配独立子域名与运行容器</small>
+                    </span>
+                    <span v-if="selectedApp?.appOnline" class="app-pill app-pill--online">运行中</span>
+                    <span v-else-if="selectedApp" class="app-pill app-pill--draft">可更新</span>
+                    <TripleArrow compact :direction="dropdownOpen ? 'up' : 'down'" class="trigger-chevron" />
+                  </button>
+
+                  <div v-if="dropdownOpen" class="app-picker-popover" role="listbox" aria-labelledby="deploy-application-label">
+                    <div v-if="applications.length >= 5" class="picker-search-box">
+                      <Icon name="search" />
+                      <input
+                        ref="pickerSearchInput"
+                        v-model="appSearch"
+                        type="search"
+                        placeholder="搜索应用名称或仓库…"
+                        aria-label="搜索已有应用"
+                      />
+                    </div>
+
+                    <div class="picker-options-scroll">
+                      <button
+                        type="button"
+                        role="option"
+                        class="picker-option picker-option--create"
+                        :class="{ selected: form.application === 'create' }"
+                        :aria-selected="form.application === 'create'"
+                        @click="chooseApplication('create')"
+                      >
+                        <span class="option-badge option-badge--create"><Icon name="plus" /></span>
+                        <span class="option-body">
+                          <strong>创建新应用</strong>
+                          <small>为新项目分配独立访问地址与运行环境</small>
+                        </span>
+                        <Icon v-if="form.application === 'create'" name="check" class="option-check" />
+                      </button>
+
+                      <template v-if="primaryApps.length">
+                        <div class="picker-group-label">已有应用 ({{ primaryApps.length }})</div>
+                        <button
+                          v-for="app in primaryApps"
+                          :key="app.appId"
+                          type="button"
+                          role="option"
+                          class="picker-option"
+                          :class="{ selected: form.application === app.appId }"
+                          :aria-selected="form.application === app.appId"
+                          @click="chooseApplication(app.appId)"
+                        >
+                          <span class="option-badge" :class="{ online: app.appOnline }">
+                            <Icon name="rocket" />
+                          </span>
+                          <span class="option-body">
+                            <span class="option-title-row">
+                              <strong>更新 {{ app.subdomain }}</strong>
+                              <span v-if="app.appOnline" class="app-pill app-pill--online">运行中</span>
+                              <span v-if="scopeMode === 'all' && app.ownerName && app.mine === false" class="app-pill app-pill--owner">
+                                {{ app.ownerName }}
+                              </span>
+                            </span>
+                            <small>{{ app.subdomain }}.{{ options.baseDomain }} · {{ shortRepoText(app.repository) }}</small>
+                          </span>
+                          <Icon v-if="form.application === app.appId" name="check" class="option-check" />
+                        </button>
+                      </template>
+
+                      <template v-if="draftApps.length">
+                        <button
+                          v-if="!appSearch"
+                          type="button"
+                          class="picker-draft-toggle"
+                          :aria-expanded="showDraftApps"
+                          @click.stop="showDraftApps = !showDraftApps"
+                        >
+                          <span>{{ showDraftApps ? "收起" : "展开" }} {{ draftApps.length }} 个未完成首次上线的草稿</span>
+                          <Icon name="chevron-right" :class="{ rotated: showDraftApps }" />
+                        </button>
+                        <div v-if="showDraftApps || appSearch" class="picker-draft-list">
+                          <button
+                            v-for="app in draftApps"
+                            :key="app.appId"
+                            type="button"
+                            role="option"
+                            class="picker-option picker-option--draft"
+                            :class="{ selected: form.application === app.appId }"
+                            :aria-selected="form.application === app.appId"
+                            @click="chooseApplication(app.appId)"
+                          >
+                            <span class="option-badge option-badge--draft"><Icon name="blocks" /></span>
+                            <span class="option-body">
+                              <span class="option-title-row">
+                                <strong>继续部署 {{ app.subdomain }}</strong>
+                                <span class="app-pill app-pill--draft">未上线草稿</span>
+                                <span v-if="scopeMode === 'all' && app.ownerName && app.mine === false" class="app-pill app-pill--owner">
+                                  {{ app.ownerName }}
+                                </span>
+                              </span>
+                              <small>{{ shortRepoText(app.repository) }}</small>
+                            </span>
+                            <Icon v-if="form.application === app.appId" name="check" class="option-check" />
+                          </button>
+                        </div>
+                      </template>
+
+                      <p v-if="appSearch && !primaryApps.length && !draftApps.length" class="picker-no-match">
+                        未找到匹配「{{ appSearch }}」的应用
+                      </p>
+                    </div>
+                  </div>
                 </div>
+
                 <p
                   v-if="errors[0]"
                   id="application-error"
@@ -203,11 +434,27 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
                 >
                   {{ errors[0] }}
                 </p>
-                <div class="application-note">
+                <div v-if="selectedApp" class="application-note application-note--existing">
+                  <span class="application-icon"><Icon name="rocket" /></span>
+                  <div class="application-note-copy">
+                    <strong>更新 {{ selectedApp.subdomain }}.{{ options.baseDomain }}</strong>
+                    <p>将从绑定仓库 <code>{{ shortRepoText(selectedApp.repository) }}</code> 拉取最新 <code>main</code> 分支平滑发布，已保存密钥自动沿用。</p>
+                  </div>
+                  <a
+                    v-if="selectedApp.url"
+                    class="application-live-btn"
+                    :href="selectedApp.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    访问线上 <Icon name="arrow-up-right" />
+                  </a>
+                </div>
+                <div v-else class="application-note">
                   <span class="application-icon"><Icon name="blocks" /></span>
                   <div>
                     <strong>新的开始</strong>
-                    <p>为你的项目创建独立应用与访问地址。</p>
+                    <p>为你的项目创建独立应用与专属访问地址。</p>
                   </div>
                 </div>
               </template>
@@ -379,7 +626,15 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
             部署执行环境待配置，暂未开放提交。
           </p>
         </form>
-        <DeploymentActivity :job="job" :history="history" @select="viewJob" @continued="viewJob" />
+        <DeploymentActivity
+          :job="job"
+          :history="history"
+          :scope-mode="scopeMode"
+          :has-other-users-records="hasOtherUsersRecords"
+          @select="viewJob"
+          @continued="viewJob"
+          @update:scope-mode="scopeMode = $event"
+        />
         <p v-if="notice" class="deployment-notice" role="status">
           <Icon name="info" />{{ notice }}
         </p>
@@ -412,8 +667,8 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
             </div>
             <div>
               <dt><Icon name="folder" />代码仓库</dt>
-              <dd :title="form.repository || undefined">
-                {{ !errors[1] ? "已填写" : "待填写" }}
+              <dd class="blueprint-repo-dd" :title="form.repository || undefined">
+                {{ shortRepository || "待填写" }}
               </dd>
             </div>
           </dl>
@@ -749,10 +1004,314 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
   color: #b86751;
   margin-left: 4px;
 }
-.deploy-select {
-  position: relative;
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
-.deploy-select select,
+.field-label-row label {
+  margin: 0;
+}
+.scope-pills {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 9px;
+  background: #edf3fb;
+  border: 1px solid #dce7f5;
+}
+.scope-pills button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #5c7491;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.scope-pills button.active {
+  background: #fff;
+  color: #1f57b8;
+  box-shadow: 0 1px 4px #1d478218;
+}
+
+.deploy-app-picker {
+  position: relative;
+  z-index: 20;
+}
+.app-picker-trigger {
+  width: 100%;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 16px;
+  border: 1px solid #cbd9eb;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #26415f;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 2px 10px #1f457808;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.app-picker-trigger:hover {
+  border-color: #9ec0ea;
+}
+.app-picker-trigger.open,
+.app-picker-trigger:focus-visible {
+  border-color: #4f8ae8;
+  box-shadow: 0 0 0 4px #3781ef17;
+  outline: none;
+}
+.trigger-leading {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #e8f1ff;
+  color: #2463d8;
+  flex-shrink: 0;
+}
+.trigger-leading.is-existing {
+  background: linear-gradient(135deg, #2d73f5, #1b56ca);
+  color: #fff;
+}
+.trigger-leading .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+.trigger-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.trigger-copy strong {
+  font-size: 15px;
+  font-weight: 650;
+  color: #1c3657;
+  overflow-wrap: anywhere;
+}
+.trigger-copy small {
+  font-size: 12px;
+  color: #778da8;
+  overflow-wrap: anywhere;
+}
+.trigger-chevron {
+  color: #6f8aac;
+  flex-shrink: 0;
+}
+.app-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app-pill--online {
+  background: #e1f6ec;
+  color: #167656;
+}
+.app-pill--draft {
+  background: #edf3fb;
+  color: #4d6a8e;
+}
+.app-pill--owner {
+  background: #f1f4f9;
+  color: #5d7088;
+}
+
+.app-picker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  border: 1px solid #cedef2;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 22px 50px -16px #183a6d38, 0 4px 14px #183a6d12;
+  padding: 8px;
+  overflow: hidden;
+}
+.picker-search-box {
+  position: relative;
+  margin-bottom: 6px;
+}
+.picker-search-box .ui-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: #829ab6;
+}
+.picker-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 36px;
+  border: 1px solid #dce7f5;
+  border-radius: 10px;
+  background: #f7faff;
+  font-size: 13px;
+  color: #244061;
+  outline: none;
+}
+.picker-search-box input:focus {
+  border-color: #72a5ec;
+  background: #fff;
+}
+.picker-options-scroll {
+  max-height: 296px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  display: grid;
+  gap: 3px;
+  padding-right: 2px;
+}
+.picker-options-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.picker-options-scroll::-webkit-scrollbar-track {
+  background: #f1f6fd;
+  border-radius: 999px;
+}
+.picker-options-scroll::-webkit-scrollbar-thumb {
+  background: #b7cde9;
+  border-radius: 999px;
+}
+.picker-group-label {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #7c93ae;
+}
+.picker-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.picker-option:hover {
+  background: #f2f7ff;
+}
+.picker-option.selected {
+  background: #e8f2ff;
+  border-color: #c5dcfa;
+}
+.picker-option--create {
+  border-bottom: 1px solid #edf2fa;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  margin-bottom: 2px;
+}
+.option-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: #edf3fc;
+  color: #3f6ca8;
+  flex-shrink: 0;
+}
+.option-badge.online {
+  background: #e3f5ed;
+  color: #197758;
+}
+.option-badge--create {
+  background: #e5f0ff;
+  color: #2161d8;
+}
+.option-badge--draft {
+  background: #f2f5fa;
+  color: #6b819c;
+}
+.option-badge .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+.option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.option-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.option-body strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: #1c3658;
+}
+.option-body small {
+  font-size: 12px;
+  color: #7a90ab;
+  overflow-wrap: anywhere;
+}
+.option-check {
+  width: 17px;
+  height: 17px;
+  color: #1e62da;
+  flex-shrink: 0;
+}
+.picker-draft-toggle {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px dashed #e3ecf7;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #6e85a1;
+  font-size: 12px;
+  cursor: pointer;
+}
+.picker-draft-toggle:hover {
+  color: #275fb8;
+}
+.picker-draft-toggle .ui-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.16s ease;
+}
+.picker-draft-toggle .ui-icon.rotated {
+  transform: rotate(90deg);
+}
+.picker-draft-list {
+  display: grid;
+  gap: 3px;
+}
+.picker-no-match {
+  margin: 12px 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: #7b90aa;
+}
+
 .deploy-input-wrap input {
   width: 100%;
   height: 54px;
@@ -766,19 +1325,6 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
   outline: none;
   margin: 0;
 }
-.deploy-select select {
-  appearance: none;
-  padding-right: 46px;
-  cursor: pointer;
-}
-.deploy-select > .triple-arrow {
-  position: absolute;
-  right: 16px;
-  top: 14px;
-  color: #718cac;
-  pointer-events: none;
-}
-.deploy-select select:focus,
 .deploy-input-wrap input:focus {
   border-color: #70a0e2;
   box-shadow: 0 0 0 4px #3781ef12;
@@ -864,9 +1410,42 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
   font-weight: 550;
 }
 .application-note p {
-  color: #8a9aaf;
-  font-size: 12px;
+  color: #7d8fa6;
+  font-size: 12.5px;
+  line-height: 1.6;
   margin: 5px 0 0;
+}
+.application-note--existing {
+  border-style: solid;
+  border-color: #cbe0fa;
+  background: linear-gradient(120deg, #eef5ff, #f8fbff);
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.application-note-copy {
+  flex: 1;
+  min-width: 200px;
+}
+.application-live-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: #fff;
+  border: 1px solid #c5dbf8;
+  color: #1f5ec9;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.application-live-btn:hover {
+  background: #ebf3ff;
+}
+.application-live-btn .ui-icon {
+  width: 13px;
+  height: 13px;
 }
 .domain-preview {
   display: flex;
@@ -991,8 +1570,9 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
   border-radius: 9px;
 }
 .deploy-blueprint {
-  position: relative;
-  align-self: stretch;
+  position: sticky;
+  top: calc(var(--header-offset, 112px) + 16px);
+  align-self: start;
   overflow: hidden;
   min-width: 0;
   border-radius: 19px;
@@ -1125,6 +1705,12 @@ onBeforeRouteLeave(() => !hasPendingSecretInput() || window.confirm("已填写�
 .deploy-blueprint dd {
   margin: 0;
   color: #c6d7ed;
+}
+.blueprint-repo-dd {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .blueprint-footnote {
   font-size: 10px;

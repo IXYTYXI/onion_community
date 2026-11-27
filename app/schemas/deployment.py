@@ -26,6 +26,11 @@ class DeploymentJob(BaseModel):
     updatedAt: float
     url: str | None
     error: DeploymentFailure | None
+    mine: bool = True
+    ownerName: str = ""
+    appOnline: bool = False
+    appUpdatable: bool = True
+    everSucceeded: bool = False
 
 
 class DeploymentOptions(BaseModel):

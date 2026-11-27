@@ -18,26 +18,33 @@ const labels = {
 .deployment-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 600;
+  background: #edf3fb;
   color: #436998;
+  white-space: nowrap;
 }
 i {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
 }
 [data-status="succeeded"] {
-  color: #237c68;
+  background: #e3f5ed;
+  color: #1c755d;
 }
 [data-status="failed"],
 [data-status="recovery_required"] {
-  color: #a64d40;
+  background: #fff0ec;
+  color: #a84839;
 }
 [data-status="running"] {
-  color: #2864d3;
+  background: #e6f0ff;
+  color: #215fd0;
 }
 </style>

@@ -142,15 +142,17 @@ async def job(job_id: str, request: Request, user: CurrentUser):
         try:
             data = json.loads(saved)
             if data["updatedAt"] == raw["updated_at"]:
-                return success(request, data)
+                enriched = await asyncio.to_thread(s.attach_actor_scope, data, raw, actor)
+                return success(request, enriched)
         except (ValueError, KeyError, TypeError):
             pass
-    data = await asyncio.to_thread(s.project_job, raw)
+    base_data = await asyncio.to_thread(s.project_job, raw)
     try:
-        await cache.set(key, json.dumps(data), ttl=5)
+        await cache.set(key, json.dumps(base_data), ttl=5)
     except (RedisError, TimeoutError, OSError):
         logging.getLogger("ows_community").warning("deployment_cache_write_failed")
-    return success(request, data)
+    enriched = await asyncio.to_thread(s.attach_actor_scope, base_data, raw, actor)
+    return success(request, enriched)
 
 
 @router.get("/jobs/{job_id}/secrets", response_model=Envelope[DeploymentSecretRequirements])

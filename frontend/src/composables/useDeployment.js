@@ -132,15 +132,53 @@ export function useDeployment() {
     });
   }
   const form = reactive({ application: "create", repository: "", name: "" });
-  const applications = computed(() => [
-    ...new Map(
-      history.value
-        .filter((item) => item.appId)
-        .slice()
-        .reverse()
-        .map((item) => [item.appId, item]),
-    ).values(),
-  ]);
+  const scopeMode = ref("mine");
+  const hasOtherUsersRecords = computed(() =>
+    history.value.some((item) => item.mine === false),
+  );
+  const scopedHistory = computed(() =>
+    scopeMode.value === "all"
+      ? history.value
+      : history.value.filter((item) => item.mine !== false),
+  );
+  const applications = computed(() => {
+    // Keep the newest task per appId, exclude superseded/offline apps, and deduplicate by subdomain.
+    const latestByApp = new Map();
+    for (const item of scopedHistory.value) {
+      if (!item.appId || item.appUpdatable === false) continue;
+      if (!latestByApp.has(item.appId)) latestByApp.set(item.appId, item);
+    }
+    const bySubdomain = new Map();
+    for (const item of latestByApp.values()) {
+      const key = item.subdomain || item.appId;
+      const existing = bySubdomain.get(key);
+      if (!existing) {
+        bySubdomain.set(key, item);
+        continue;
+      }
+      const itemRank = (item.appOnline ? 2 : 0) + (item.everSucceeded ? 1 : 0);
+      const existingRank = (existing.appOnline ? 2 : 0) + (existing.everSucceeded ? 1 : 0);
+      if (itemRank > existingRank) {
+        bySubdomain.set(key, item);
+      }
+    }
+    return [...bySubdomain.values()].sort((a, b) => {
+      const tier = (entry) => (entry.appOnline ? 0 : entry.everSucceeded !== false && entry.status !== "failed" ? 1 : 2);
+      const diff = tier(a) - tier(b);
+      if (diff !== 0) return diff;
+      return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
+  });
+  watch(scopeMode, () => {
+    if (
+      form.application !== "create" &&
+      !applications.value.some((item) => item.appId === form.application)
+    ) {
+      form.application = "create";
+      form.repository = "";
+      form.name = "";
+    }
+  });
   watch(
     () => form.application,
     (id) => {
@@ -357,5 +395,8 @@ export function useDeployment() {
     options,
     viewJob,
     applications,
+    scopeMode,
+    hasOtherUsersRecords,
+    scopedHistory,
   };
 }
