@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     faq_cache_seconds: int = Field(default=600, ge=10, le=86400)
     faq_stale_seconds: int = Field(default=86400, ge=60, le=2592000)
     faq_source_tenant: str = ""
+    activities_table_id: str = ""
+    activities_view_id: str = ""
+    activities_cache_seconds: int = Field(default=120, ge=10, le=86400)
+    activities_stale_seconds: int = Field(default=604800, ge=60, le=2592000)
+    activities_source_tenant: str = ""
+    activities_webhook_token: SecretStr = SecretStr("")
     news_table_id: str = ""
     news_view_id: str = ""
     news_cache_seconds: int = Field(default=600, ge=10, le=86400)
@@ -107,6 +113,14 @@ class Settings(BaseSettings):
             and "ows_copy_stats_table_id" not in self.model_fields_set
         ):
             self.ows_copy_stats_table_id = "tblFkqHq5BoYxpBB"
+        if (
+            self.feishu_bitable_app_token.get_secret_value() == "G4IDb5NF9awa0Hs1mn9cvRlNnGb"
+            or self.cases_table_id == "tbldtSGzcfa6twD0"
+        ):
+            if not self.activities_table_id and "activities_table_id" not in self.model_fields_set:
+                self.activities_table_id = "tbl5qzmoEEGPE20k"
+            if not self.activities_view_id and "activities_view_id" not in self.model_fields_set:
+                self.activities_view_id = "vewpNqiXVt"
         coin_override_fields = self.model_fields_set & {"coin_base_token", "coin_table_id"}
         if (self.cases_table_id == "tbldtSGzcfa6twD0"
                 and self.cases_engagement_table_id == "tblUTQgRmYHxdiuh"
@@ -122,6 +136,8 @@ class Settings(BaseSettings):
             raise ValueError('社区助手必须配置 Redis、Agent、反馈表和来源租户')
         if self.faq_stale_seconds <= self.faq_cache_seconds:
             raise ValueError("faq_stale_seconds 必须大于 faq_cache_seconds")
+        if self.activities_stale_seconds <= self.activities_cache_seconds:
+            raise ValueError("activities_stale_seconds 必须大于 activities_cache_seconds")
         if self.news_stale_seconds <= self.news_cache_seconds:
             raise ValueError("news_stale_seconds 必须大于 news_cache_seconds")
         if self.news_sync_enabled and (self.store_backend != 'redis' or not self.news_table_id or not self.news_view_id):

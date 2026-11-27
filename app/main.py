@@ -12,6 +12,8 @@ from app.integrations.news_table import NewsTable
 from app.api.news import router as news_router
 from app.api.faq import router as faq_router
 from app.services.faq import FAQService, FAQ_FIELDS
+from app.api.activities import router as activities_router
+from app.services.activities import ACTIVITY_FIELDS, ActivityService
 
 import httpx
 from fastapi import Depends, FastAPI
@@ -104,6 +106,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                     table_id=settings.banner_table_id, view_id=settings.banner_view_id, fields=BANNER_FIELDS, automatic_fields=True), settings)
                 app.state.faq = FAQService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.faq_table_id, view_id=settings.faq_view_id, fields=FAQ_FIELDS), settings)
+                app.state.activities = ActivityService(selected, FeishuDirectorySource(client, settings, selected,
+                    table_id=settings.activities_table_id, view_id=settings.activities_view_id, fields=ACTIVITY_FIELDS), settings)
                 app.state.news = NewsService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.news_table_id, view_id=settings.news_view_id, fields=NEWS_FIELDS), settings)
                 app.state.news_sync = NewsSync(client, NewsTable(client, settings, selected,
@@ -152,6 +156,7 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
     app.include_router(cases_router)
     app.include_router(news_router)
     app.include_router(faq_router)
+    app.include_router(activities_router)
     app.include_router(banner_router)
     app.include_router(ows_release_router)
     app.include_router(pages)

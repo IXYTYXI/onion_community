@@ -73,6 +73,16 @@ async function getContent({
     state.faq = data.items;
     delete state.faqError;
   }).catch(error => { state.faqError = error.message || "常见问题暂时无法加载"; }) : Promise.resolve();
+  const activitiesRequest = page === "activities" ? auth.request("/api/v1/activities").then(data => {
+    state.activities = data.items;
+    state.activitiesStale = Boolean(data.stale);
+    state.activitiesUpdatedAt = data.updated_at;
+    delete state.activitiesError;
+  }).catch(error => {
+    state.activities = state.activities || [];
+    state.activitiesStale = false;
+    state.activitiesError = error.message || "活动信息暂时无法加载";
+  }) : Promise.resolve();
   const casesRequest = needsCases ? auth.request("/api/v1/cases").then(data => {
     state.cases = [...data.items.map(adapt), ...local.cases];
     state.casesStale = Boolean(data.stale);
@@ -83,7 +93,7 @@ async function getContent({
     state.casesStale = false;
     state.casesError = error.message || "案例暂时无法加载";
   }) : Promise.resolve();
-  await Promise.all([bannerRequest, newsRequest, casesRequest, faqRequest]);
+  await Promise.all([bannerRequest, newsRequest, casesRequest, faqRequest, activitiesRequest]);
   return state;
 }
 export const repository = {

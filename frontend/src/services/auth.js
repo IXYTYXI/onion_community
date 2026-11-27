@@ -5,7 +5,7 @@ export function safeNext(value) {
   try {
     const u = new URL(value, location.origin);
     return u.origin === location.origin &&
-      /^\/(index|cases|news|skills|connect|services|profile|detail|officers|deploy)\.html$/.test(
+      /^\/(index|cases|news|activities|skills|connect|services|profile|detail|officers|deploy)\.html$/.test(
         u.pathname,
       )
       ? u.pathname + u.search + u.hash

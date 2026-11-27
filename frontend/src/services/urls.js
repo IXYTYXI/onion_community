@@ -9,7 +9,7 @@ export const safeUrl = (value) => {
 export const imageUrl = (value) =>
   /^data:image\/(png|jpeg|webp);base64,/.test(value || "")
     ? value
-    : /^\/api\/v1\/(banner|officers|cases|news)\/media\/[a-f0-9]{64}$/.test(value || "")
+    : /^\/api\/v1\/(banner|officers|cases|news|activities)\/media\/[a-f0-9]{64}$/.test(value || "")
       ? value
       : safeUrl(value);
 export const detailUrl = (type, id = "") =>

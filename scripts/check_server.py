@@ -45,6 +45,7 @@ def check(settings, *, executor=False):
             "index",
             "cases",
             "news",
+            "activities",
             "skills",
             "services",
             "deploy",

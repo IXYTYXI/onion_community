@@ -18,7 +18,7 @@ def test_preflight_accepts_shared_vite_entry_and_rejects_missing_assets(tmp_path
         "login.html": {"file": "assets/shared.js", "isEntry": True},
     }))
     for name in (
-        "index", "cases", "news", "skills", "services", "deploy",
+        "index", "cases", "news", "activities", "skills", "services", "deploy",
         "profile", "detail", "officers", "login",
     ):
         (build / f"{name}.html").write_text('<script src="/assets/shared.js"></script>')

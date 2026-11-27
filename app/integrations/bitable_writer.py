@@ -33,7 +33,7 @@ class BitableWriter(FeishuDirectorySource):
             code = data.get("code") if isinstance(data, dict) else None
             if response.status_code == 403 or code == 91403:
                 raise BitablePermissionError(code or response.status_code) from None
-            if code in {1254015, 1254043, 1254045}:
+            if code in {1254015, 1254043, 1254045, 1254060, 1254061, 1254062}:
                 raise BitableLinkError(code) from None
             raise
 

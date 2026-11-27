@@ -15,6 +15,7 @@ PUBLIC_ENDPOINTS = frozenset({
     ("POST", "/api/v1/auth/feishu"),  # Legacy endpoint always rejects unbound codes.
     ("POST", "/api/v1/site-settings/webhook"),  # Independent bearer token, refresh only.
     ("POST", "/api/v1/ows-release/webhook"),  # Separate bearer token checked by the handler.
+    ("POST", "/api/v1/activities/webhook"),  # Optional Feishu hook; separate bearer token.
 })
 
 

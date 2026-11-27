@@ -18,6 +18,7 @@ SCHEMA = (
         scope TEXT NOT NULL, case_id TEXT NOT NULL, account TEXT NOT NULL,
         liked INTEGER NOT NULL, favorited INTEGER NOT NULL, liked_at INTEGER, favorited_at INTEGER,
         revision INTEGER NOT NULL DEFAULT 0, sync_pending INTEGER NOT NULL DEFAULT 0,
+        user_open_id TEXT NOT NULL DEFAULT '', user_name TEXT NOT NULL DEFAULT '',
         PRIMARY KEY(scope, case_id, account)
     ) WITHOUT ROWID''',
     '''CREATE INDEX IF NOT EXISTS case_sync_due ON case_interactions(scope, case_id, account)
@@ -62,6 +63,14 @@ def _schema(conn):
     for statement in SCHEMA:
         conn.execute(statement)
     conn.commit()
+
+
+def _ensure_user_columns(conn):
+    cols = {row[1] for row in conn.execute('PRAGMA table_info(case_interactions)')}
+    if cols and 'user_open_id' not in cols:
+        conn.execute("ALTER TABLE case_interactions ADD COLUMN user_open_id TEXT NOT NULL DEFAULT ''")
+    if cols and 'user_name' not in cols:
+        conn.execute("ALTER TABLE case_interactions ADD COLUMN user_name TEXT NOT NULL DEFAULT ''")
 
 
 def _initialized(conn, scope):
@@ -152,9 +161,10 @@ class CaseInteractionDB:
             return _read_items(conn, scope, account, visible)
         return await self._run(read)
 
-    async def set_active(self, scope, account, case_id, action, active, meta):
+    async def set_active(self, scope, account, case_id, action, active, meta, *, user_open_id='', user_name=''):
         def apply(conn):
             _require_import(conn, scope)
+            _ensure_user_columns(conn)
             before = _read_items(conn, scope, account, [case_id])[case_id]
             if action == 'like':
                 flag, date, count = 'liked', 'liked_at', 'like_count'
@@ -169,12 +179,16 @@ class CaseInteractionDB:
                                               count: getattr(before, count) + (1 if active else -1)})
             # Revision stays on the source row after delivery, protecting later edits from stale ACKs.
             conn.execute('''INSERT INTO case_interactions
-                            (scope, case_id, account, liked, favorited, liked_at, favorited_at, revision, sync_pending)
-                            VALUES(?, ?, ?, ?, ?, ?, ?, 1, 1)
+                            (scope, case_id, account, liked, favorited, liked_at, favorited_at, revision, sync_pending,
+                             user_open_id, user_name)
+                            VALUES(?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
                             ON CONFLICT(scope, case_id, account) DO UPDATE SET
                               liked=excluded.liked, favorited=excluded.favorited, liked_at=excluded.liked_at,
-                              favorited_at=excluded.favorited_at, revision=revision+1, sync_pending=1''',
-                         (scope, case_id, account, after.liked, after.favorited, after.liked_at, after.favorited_at))
+                              favorited_at=excluded.favorited_at, revision=revision+1, sync_pending=1,
+                              user_open_id=CASE WHEN excluded.user_open_id != '' THEN excluded.user_open_id ELSE case_interactions.user_open_id END,
+                              user_name=CASE WHEN excluded.user_name != '' THEN excluded.user_name ELSE case_interactions.user_name END''',
+                         (scope, case_id, account, after.liked, after.favorited, after.liked_at, after.favorited_at,
+                          user_open_id or '', user_name or ''))
             conn.execute('''INSERT INTO case_totals(scope, case_id, likes, favorites) VALUES(?, ?, ?, ?)
                             ON CONFLICT(scope, case_id) DO UPDATE SET likes=excluded.likes,
                                                                      favorites=excluded.favorites''',
@@ -187,9 +201,11 @@ class CaseInteractionDB:
     async def pending_sync(self, scope, limit=50, after=None):
         def read(conn):
             _require_import(conn, scope)
+            cols = {row[1] for row in conn.execute('PRAGMA table_info(case_interactions)')}
+            extra = ', user_open_id, user_name' if 'user_open_id' in cols else ", '' AS user_open_id, '' AS user_name"
             cursor = ' AND (case_id, account) > (?, ?)' if after is not None else ''
             params = (scope, *after, limit) if after is not None else (scope, limit)
-            rows = conn.execute(f'''SELECT case_id, account, liked, favorited, liked_at, favorited_at, revision
+            rows = conn.execute(f'''SELECT case_id, account, liked, favorited, liked_at, favorited_at, revision{extra}
                                    FROM case_interactions WHERE scope=? AND sync_pending=1
                                    {cursor} ORDER BY case_id, account LIMIT ?''', params)
             return [{**dict(row), 'liked': bool(row['liked']), 'favorited': bool(row['favorited'])} for row in rows]

@@ -8,7 +8,11 @@ test('external links reject executable protocols',()=>{for(const url of ['javasc
 test('login return destination stays on known business pages',()=>{for(const url of ['https://evil.test/cases.html','//evil.test','/api/v1/auth/feishu/start','/login.html'])assert.equal(safeNext(url),'/index.html');assert.equal(safeNext('/cases.html?q=AI&page=2'),'/cases.html?q=AI&page=2');});
 test('case illustrations escape table content and never render arbitrary HTML',()=>{const html=preview({remote:true,product_type:'<img src=x onerror=alert(1)>',category:'<script>x</script>',number:'" onclick="x'});assert.ok(!html.includes('<script>'));assert.ok(!html.includes('<img'));assert.ok(html.includes('&lt;script&gt;'));assert.match(detailUrl('case','a&b'),/id=a%26b/);});
 
-test('deployment page remains a safe login return destination', () => {
+test('deployment and activities pages remain safe login return destinations', () => {
   assert.equal(safeNext('/deploy.html'), '/deploy.html');
+  assert.equal(safeNext('/activities.html?review=rec1'), '/activities.html?review=rec1');
   assert.equal(safeNext('https://evil.test/deploy.html'), '/index.html');
+  assert.equal(safeNext('https://evil.test/activities.html'), '/index.html');
+  const activityMedia = '/api/v1/activities/media/' + 'b'.repeat(64);
+  assert.equal(imageUrl(activityMedia), activityMedia);
 });

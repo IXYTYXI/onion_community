@@ -16,7 +16,7 @@ from app.integrations.feishu import PROFILE_SCOPES
 SESSION_COOKIE = "ows_session"
 FLOW_COOKIE = "ows_oauth"
 FLOW_PATH = "/api/v1/auth/feishu"
-PAGES = {"/deploy.html", "/officers.html", "/index.html", "/cases.html", "/news.html", "/skills.html", "/connect.html", "/services.html", "/profile.html", "/detail.html"}
+PAGES = {"/deploy.html", "/officers.html", "/index.html", "/cases.html", "/news.html", "/activities.html", "/skills.html", "/connect.html", "/services.html", "/profile.html", "/detail.html"}
 
 
 def safe_next(value: str) -> str:

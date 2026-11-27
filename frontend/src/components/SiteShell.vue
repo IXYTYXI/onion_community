@@ -14,6 +14,7 @@ const links = [
   ["home", "index.html", "首页", "社区大门：精选内容一站速览"],
   ["cases", "cases.html", "案例库", "看其他光年怎么用 AI，找灵感抄作业"],
   ["news", "news.html", "AI 资讯", "全球 AI 前沿动态，每日更新"],
+  ["activities", "activities.html", "AI 活动", "培训、分享会与实战工作坊"],
   [
     "skills",
     "https://onionhub.yc345.tv/",

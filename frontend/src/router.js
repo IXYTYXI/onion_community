@@ -17,6 +17,7 @@ const definitions = [
   ["index", "home", "Home", "首页"],
   ["cases", "cases", "Cases", "案例库"],
   ["news", "news", "News", "AI 资讯"],
+  ["activities", "activities", "Activities", "AI 活动"],
   ["skills", "skills", "Skills", "SkillHub"],
   ["connect", "connect", "Connect", "接入 OWS"],
   ["deploy", "deploy", "Deploy", "一键部署"],

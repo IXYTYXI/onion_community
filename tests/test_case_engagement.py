@@ -14,7 +14,7 @@ from app.schemas.auth import Principal
 from app.schemas.cases import Case, CaseDirectory
 from app.services.case_engagement import (
     ACCOUNT, CASE, CASE_LINK, FAVORITE as FAVORITE_FIELD, FAVORITED_AT, KEY, LIKE as LIKE_FIELD, LIKED_AT,
-    CaseEngagementService, digest,
+    USER_FIELD, CaseEngagementService, digest, feishu_open_id,
 )
 from app.services.cases import CaseService
 from app.services.browser_auth import SESSION_COOKIE, csrf_token
@@ -293,6 +293,7 @@ def test_first_put_merges_historical_copies_and_mirror_updates_only_matching_key
         assert row['fields'][LIKE_FIELD] is False and row['fields'][LIKED_AT] is None
         assert row['fields'][FAVORITE_FIELD] is True and row['fields'][FAVORITED_AT] == old + 2
         assert row['fields'][CASE_LINK] == ['a']
+        assert row['fields'][USER_FIELD] == [{'id': 'ou_one'}]
     assert other['fields'][LIKE_FIELD] and forged['fields'][LIKE_FIELD]
     # External edits after import cannot overwrite the website's committed state.
     table.rows.clear()
@@ -339,7 +340,8 @@ async def test_offline_edits_survive_restart_and_retry_ambiguous_create(configur
     assert table.scans == table.creates == 1
     assert (await recovered.directory(cases, member)).items['a'] == liked
     assert table.rows[0]['fields'][LIKED_AT] == liked.liked_at
-    assert member.user_id not in str(table.rows)
+    assert table.rows[0]['fields'][USER_FIELD] == [{'id': 'ou_one'}]
+    assert table.rows[0]['fields'][ACCOUNT] != member.user_id
 
 
 async def test_edit_during_mirror_remains_pending_for_next_revision(configured, cases, member):
@@ -397,6 +399,52 @@ async def test_projection_falls_back_when_case_link_target_is_unavailable(config
     assert await service.sync_once() == 1
     assert table.rows[0]['fields'][FAVORITE_FIELD] is True
     assert CASE_LINK not in table.rows[0]['fields']
+    assert table.rows[0]['fields'][USER_FIELD] == [{'id': 'ou_one'}]
+
+
+async def test_legacy_sqlite_migrates_user_columns_and_falls_back_when_user_field_unavailable(configured, cases, tmp_path):
+    import sqlite3
+    from app.integrations.bitable_writer import BitableLinkError
+
+    assert feishu_open_id('feishu:cli_app:ou_real_user') == 'ou_real_user'
+    assert feishu_open_id('dev-member') == ''
+
+    db_path = tmp_path / 'legacy.sqlite3'
+    conn = sqlite3.connect(db_path)
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('CREATE TABLE case_scopes (scope TEXT PRIMARY KEY NOT NULL) WITHOUT ROWID')
+    conn.execute('''CREATE TABLE case_interactions (
+        scope TEXT NOT NULL, case_id TEXT NOT NULL, account TEXT NOT NULL,
+        liked INTEGER NOT NULL, favorited INTEGER NOT NULL, liked_at INTEGER, favorited_at INTEGER,
+        revision INTEGER NOT NULL DEFAULT 0, sync_pending INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(scope, case_id, account)
+    ) WITHOUT ROWID''')
+    conn.execute('''CREATE TABLE case_totals (
+        scope TEXT NOT NULL, case_id TEXT NOT NULL, likes INTEGER NOT NULL, favorites INTEGER NOT NULL,
+        PRIMARY KEY(scope, case_id)
+    ) WITHOUT ROWID''')
+    conn.execute('''CREATE TABLE case_coin_events (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL, case_id TEXT NOT NULL,
+        title TEXT NOT NULL, author_id TEXT NOT NULL, author_name TEXT NOT NULL,
+        likes INTEGER NOT NULL, favorites INTEGER NOT NULL, happened_at INTEGER NOT NULL
+    )''')
+    conn.commit()
+    conn.close()
+
+    class NoUserFieldTable(FakeTable):
+        async def create_once(self, fields, client_token):
+            if USER_FIELD in fields:
+                raise BitableLinkError(1254045)
+            return await super().create_once(fields, client_token)
+
+    configured.case_interactions_db = db_path
+    table = NoUserFieldTable()
+    service = worker(configured, table)
+    feishu_member = Principal(user_id='feishu:app:ou_migrated', tenant_id='tenant', display_name='张三', identity_source='feishu')
+    await service.set_active(cases, feishu_member, 'a', 'like', True)
+    assert await service.sync_once() == 1
+    assert table.rows[0]['fields'][CASE_LINK] == ['a']
+    assert USER_FIELD not in table.rows[0]['fields']
 
 
 def test_blue_green_first_import_waits_until_rollback_window_has_closed(tmp_path):

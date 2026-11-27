@@ -22,6 +22,7 @@ export default defineConfig({
           "index",
           "cases",
           "news",
+          "activities",
           "skills",
           "connect",
           "services",
