@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     media_max_bytes: int = Field(default=20971520, ge=1024, le=52428800)
     media_root: Path = PROJECT_ROOT / "var/media"
     ows_release_webhook_token: SecretStr = SecretStr("")
+    ows_copy_stats_table_id: str = ""
 
     assistant_enabled: bool = False
     assistant_agent_id: str = "agent_4mdqh9jvd7kfnnn"
@@ -99,6 +100,13 @@ class Settings(BaseSettings):
     def check_deployment(self):
         if self.cases_table_id == "tbldtSGzcfa6twD0" and not self.cases_engagement_table_id:
             self.cases_engagement_table_id = "tblUTQgRmYHxdiuh"
+        if (
+            (self.feishu_bitable_app_token.get_secret_value() == "G4IDb5NF9awa0Hs1mn9cvRlNnGb"
+             or self.cases_table_id == "tbldtSGzcfa6twD0")
+            and not self.ows_copy_stats_table_id
+            and "ows_copy_stats_table_id" not in self.model_fields_set
+        ):
+            self.ows_copy_stats_table_id = "tblFkqHq5BoYxpBB"
         coin_override_fields = self.model_fields_set & {"coin_base_token", "coin_table_id"}
         if (self.cases_table_id == "tbldtSGzcfa6twD0"
                 and self.cases_engagement_table_id == "tblUTQgRmYHxdiuh"

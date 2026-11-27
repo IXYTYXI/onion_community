@@ -8,9 +8,10 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, ValidationError
 from starlette.responses import Response, StreamingResponse
 
+from app.api.dependencies import CurrentUser
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
-from app.schemas.common import success
+from app.schemas.common import InputModel, success
 
 RELEASE_URL = "https://ai.lab.yc345.tv/files/d/ows-release.json"
 INSTALL_URL = "https://ai.lab.yc345.tv/files/d/ows-install.md"
@@ -44,6 +45,16 @@ class ReleaseView(BaseModel):
     release_notes: list[ReleaseNote] = Field(min_length=1, max_length=30)
 
 
+class CopyStatsView(BaseModel):
+    unique_users: int = Field(ge=0)
+    total_copies: int = Field(ge=0)
+    my_copies: int = Field(ge=0)
+
+
+class CopyRecordInput(InputModel):
+    cli_version: str | None = Field(default=None, max_length=40)
+
+
 async def fetch_release(request: Request) -> ReleaseView:
     try:
         response = await request.app.state.release_http.get(
@@ -74,6 +85,19 @@ async def current(request: Request):
     release = await saved_release(request)
     response = success(request, release)
     return response
+
+
+@router.get("/copy-stats")
+async def get_copy_stats(request: Request, user: CurrentUser):
+    stats = await request.app.state.ows_copy_stats.summary(user)
+    return success(request, CopyStatsView.model_validate(stats))
+
+
+@router.post("/copy-stats")
+async def record_copy_stats(request: Request, user: CurrentUser, body: CopyRecordInput | None = None):
+    version = body.cli_version if body is not None else None
+    stats = await request.app.state.ows_copy_stats.record_copy(user, version)
+    return success(request, CopyStatsView.model_validate(stats))
 
 
 @router.get("/files/{filename}")

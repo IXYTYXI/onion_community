@@ -35,6 +35,7 @@ from app.services.case_engagement import CaseEngagementService, ENGAGEMENT_FIELD
 from app.integrations.bitable_writer import BitableWriter
 from app.api.banner import router as banner_router
 from app.api.ows_release import router as ows_release_router
+from app.services.ows_copy_stats import OWS_COPY_FIELDS, OwsCopyStatsService
 from app.services.banner import BannerService, BANNER_FIELDS
 from app.core.config import Settings
 from app.core.errors import register_handlers
@@ -93,6 +94,12 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                 app.state.site = SiteState(settings, switch_source)
                 app.state.case_engagement = CaseEngagementService(selected, BitableWriter(client, settings, selected,
                     table_id=settings.cases_engagement_table_id, fields=ENGAGEMENT_FIELDS), settings, db, app.state.site)
+                copy_writer = (
+                    BitableWriter(client, settings, selected, table_id=settings.ows_copy_stats_table_id, fields=OWS_COPY_FIELDS)
+                    if settings.ows_copy_stats_table_id and settings.feishu_bitable_app_token.get_secret_value() and settings.feishu_app_id
+                    else None
+                )
+                app.state.ows_copy_stats = OwsCopyStatsService(settings, db.path, copy_writer)
                 app.state.banner = BannerService(selected, FeishuDirectorySource(client, settings, selected,
                     table_id=settings.banner_table_id, view_id=settings.banner_view_id, fields=BANNER_FIELDS, automatic_fields=True), settings)
                 app.state.faq = FAQService(selected, FeishuDirectorySource(client, settings, selected,
@@ -109,6 +116,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None) -> 
                     tasks.append(asyncio.create_task(app.state.news_sync.run()))
                 if settings.cases_engagement_table_id:
                     tasks.append(asyncio.create_task(app.state.case_engagement.run()))
+                if copy_writer is not None:
+                    tasks.append(asyncio.create_task(app.state.ows_copy_stats.run()))
                 if settings.coin_base_token.get_secret_value() and settings.coin_table_id and settings.cases_engagement_table_id:
                     ledger = BitableWriter(client, settings, selected, base_token=settings.coin_base_token,
                                            table_id=settings.coin_table_id, fields=COIN_FIELDS)

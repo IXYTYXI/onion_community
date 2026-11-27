@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import PageBreadcrumb from '../components/PageBreadcrumb.vue';
 import { auth } from '../services/auth.js';
-import { installPrompt, installUrl } from '../services/ows-connect.js';
+import { fetchOwsCopyStats, installPrompt, installUrl, recordOwsCopy } from '../services/ows-connect.js';
 import { renderInstallMarkdown } from '../services/markdown.js';
 import { fetchAndCacheOwsFile, readCachedOwsFile } from '../services/ows-files.js';
 
@@ -10,6 +10,8 @@ const release = ref(null);
 const loading = ref(true);
 const error = ref('');
 const copyStatus = ref('');
+const copyStats = ref(null);
+const numbers = new Intl.NumberFormat('zh-CN');
 const guideDialog = ref(null);
 const guideHtml = ref('');
 const guideSource = ref('');
@@ -37,10 +39,24 @@ async function loadRelease() {
   }
 }
 
+async function loadCopyStats() {
+  try {
+    const stats = await fetchOwsCopyStats(auth.request);
+    if (stats) copyStats.value = stats;
+  } catch {
+    // Stats display is non-blocking; release info and copy button still work.
+  }
+}
+
 async function copyPrompt() {
   try {
     await navigator.clipboard.writeText(installPrompt);
     copyStatus.value = '已复制接入说明，粘贴给你的 Agent 即可。';
+    recordOwsCopy(auth.request, release.value?.cli_version)
+      .then((stats) => {
+        if (stats) copyStats.value = stats;
+      })
+      .catch(() => {});
   } catch {
     copyStatus.value = '复制失败，请检查浏览器的剪贴板权限后重试。';
   }
@@ -100,6 +116,7 @@ function downloadFile(filename) {
 
 onMounted(() => {
   loadRelease();
+  loadCopyStats();
   loadFiles();
   events = new EventSource('/api/v1/ows-release/events', { withCredentials: true });
   events.addEventListener('release', (event) => {
@@ -135,6 +152,9 @@ onUnmounted(() => {
         <div class="connect-actions">
           <button type="button" class="connect-copy" @click="copyPrompt">复制接入链接</button>
           <button type="button" class="connect-guide-open" aria-haspopup="dialog" @click="openGuide">查看接入说明 ↗</button>
+          <span v-if="copyStats" class="connect-copy-stats" aria-label="复制统计">
+            已有 <strong>{{ numbers.format(copyStats.unique_users) }}</strong> 人复制 · 累计 <strong>{{ numbers.format(copyStats.total_copies) }}</strong> 次
+          </span>
         </div>
         <p v-if="copyStatus" class="copy-feedback" role="status">{{ copyStatus }}</p>
       </div>
@@ -230,6 +250,8 @@ onUnmounted(() => {
 .connect-guide-open:hover, .connect-current a:hover { text-decoration: underline; }
 .connect-copy { min-height: 47px; padding: 0 24px; border-radius: 10px; background: #1765e9; color: #fff; font-weight: 650; box-shadow: 0 5px 13px #1b63d529; }
 .connect-copy:hover { background: #0c51c5; color: #fff; }
+.connect-copy-stats { display: inline-flex; align-items: baseline; gap: 4px; padding: 6px 12px; border: 1px solid #dce7f7; border-radius: 999px; background: #f5f9ff; color: #526c8c; font-size: 13px; font-variant-numeric: tabular-nums; }
+.connect-copy-stats strong { color: #1760d5; font-weight: 700; }
 .copy-feedback { margin-top: 12px !important; color: #16734c !important; font-size: 14px; }
 .connect-current { border-left: 1px solid #dce7f6; padding-left: 29px; }
 .connect-current h3 { font-size: 16px; margin-bottom: 15px; }
