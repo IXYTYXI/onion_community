@@ -13,7 +13,7 @@ from app.repositories.store import MemoryStore
 from app.schemas.auth import Principal
 from app.schemas.cases import Case, CaseDirectory
 from app.services.case_engagement import (
-    ACCOUNT, CASE, FAVORITE as FAVORITE_FIELD, FAVORITED_AT, KEY, LIKE as LIKE_FIELD, LIKED_AT,
+    ACCOUNT, CASE, CASE_LINK, FAVORITE as FAVORITE_FIELD, FAVORITED_AT, KEY, LIKE as LIKE_FIELD, LIKED_AT,
     CaseEngagementService, digest,
 )
 from app.services.cases import CaseService
@@ -292,6 +292,7 @@ def test_first_put_merges_historical_copies_and_mirror_updates_only_matching_key
     for row in [liked, favorite]:
         assert row['fields'][LIKE_FIELD] is False and row['fields'][LIKED_AT] is None
         assert row['fields'][FAVORITE_FIELD] is True and row['fields'][FAVORITED_AT] == old + 2
+        assert row['fields'][CASE_LINK] == ['a']
     assert other['fields'][LIKE_FIELD] and forged['fields'][LIKE_FIELD]
     # External edits after import cannot overwrite the website's committed state.
     table.rows.clear()
@@ -368,7 +369,34 @@ async def test_edit_during_mirror_remains_pending_for_next_revision(configured, 
     [row] = table.rows
     assert row['fields'][LIKE_FIELD] and row['fields'][FAVORITE_FIELD]
     assert row['fields'][FAVORITED_AT] == latest.favorited_at
+    assert row['fields'][CASE_LINK] == ['a']
     assert table.scans == table.creates == 1
+
+
+async def test_projection_falls_back_when_case_link_target_is_unavailable(configured, cases, member):
+    from app.integrations.bitable_writer import BitableLinkError
+
+    class UnlinkedTable(FakeTable):
+        async def create_once(self, fields, client_token):
+            if CASE_LINK in fields:
+                raise BitableLinkError(1254043)
+            return await super().create_once(fields, client_token)
+
+        async def write(self, records, *, update=False):
+            if any(CASE_LINK in item['fields'] for item in records):
+                raise BitableLinkError(1254045)
+            return await super().write(records, update=update)
+
+    table = UnlinkedTable()
+    service = worker(configured, table)
+    await service.set_active(cases, member, 'a', 'like', True)
+    assert await service.sync_once() == 1
+    assert table.rows[0]['fields'][CASE] == 'a'
+    assert CASE_LINK not in table.rows[0]['fields']
+    await service.set_active(cases, member, 'a', 'favorite', True)
+    assert await service.sync_once() == 1
+    assert table.rows[0]['fields'][FAVORITE_FIELD] is True
+    assert CASE_LINK not in table.rows[0]['fields']
 
 
 def test_blue_green_first_import_waits_until_rollback_window_has_closed(tmp_path):

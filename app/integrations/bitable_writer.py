@@ -14,6 +14,12 @@ class BitablePermissionError(AppError):
         self.upstream_code = upstream_code
 
 
+class BitableLinkError(AppError):
+    def __init__(self, upstream_code):
+        super().__init__(ErrorCode.UPSTREAM_ERROR)
+        self.upstream_code = upstream_code
+
+
 class BitableWriter(FeishuDirectorySource):
     @staticmethod
     def payload(response):
@@ -27,6 +33,8 @@ class BitableWriter(FeishuDirectorySource):
             code = data.get("code") if isinstance(data, dict) else None
             if response.status_code == 403 or code == 91403:
                 raise BitablePermissionError(code or response.status_code) from None
+            if code in {1254015, 1254043, 1254045}:
+                raise BitableLinkError(code) from None
             raise
 
     def __init__(self, *args, base_token=None, **kwargs):

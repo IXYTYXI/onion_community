@@ -10,11 +10,13 @@ from uuid import UUID, uuid4
 from app.core.config import PROJECT_ROOT
 from app.core.error_codes import ErrorCode
 from app.core.errors import AppError
+from app.integrations.bitable_writer import BitableLinkError
 from app.schemas.cases import EngagementDirectory
 from app.services.case_coins import recipient
 from app.services.officers import text_value
 
 KEY, CASE, ACCOUNT = '业务唯一键', '案例ID', '飞书账号标识'
+CASE_LINK = '关联案例'
 LIKE, FAVORITE = '是否点赞', '是否收藏'
 LIKED_AT, FAVORITED_AT = '点赞时间', '收藏时间'
 ENGAGEMENT_FIELDS = [KEY, CASE, ACCOUNT, LIKE, FAVORITE, LIKED_AT, FAVORITED_AT]
@@ -131,32 +133,51 @@ class CaseEngagementService:
         await self.import_existing(scope, visible)
         return await self.db.set_active(scope, account, case, action, active, case_metadata(visible[case]))
 
+    async def _write_batches(self, records, payload):
+        updates = [{'record_id': item['record_id'], 'fields': payload} for item in records]
+        for start in range(0, len(updates), 200):
+            await self.writer.write(updates[start:start + 200], update=True)
+
     async def project(self, scope, row):
         case, account = row['case_id'], row['account']
         key = digest(scope, case, account)
         projection = {LIKE: row['liked'], FAVORITE: row['favorited'],
                       LIKED_AT: row['liked_at'], FAVORITED_AT: row['favorited_at']}
+        linked_projection = {**projection, CASE_LINK: [case]}
         matches = await self.writer.all_records(record_filter={'conjunction': 'and', 'conditions': [
             {'field_name': KEY, 'operator': 'is', 'value': [key]}]})
         if matches:
-            updates = [{'record_id': match['record_id'], 'fields': projection} for match in matches
-                       if text_value(match['fields'].get(KEY)) == key]
-            if len(updates) != len(matches):
+            if any(text_value(match['fields'].get(KEY)) != key for match in matches):
                 raise AppError(ErrorCode.UPSTREAM_ERROR)
-            for start in range(0, len(updates), 200):
-                await self.writer.write(updates[start:start + 200], update=True)
+            try:
+                await self._write_batches(matches, linked_projection)
+            except BitableLinkError:
+                await self._write_batches(matches, projection)
         else:
             # Feishu can replay a previous create acknowledgement after an ambiguous
             # timeout. Verify acknowledged values before clearing this local revision.
-            fields = {KEY: key, CASE: case, ACCOUNT: account, **projection}
-            token = str(UUID(hex=key[:32], version=4))
-            created = await self.writer.create_once(fields, token)
+            used_projection = linked_projection
+            try:
+                created = await self.writer.create_once(
+                    {KEY: key, CASE: case, ACCOUNT: account, **linked_projection},
+                    str(UUID(hex=key[:32], version=4)),
+                )
+            except BitableLinkError:
+                used_projection = projection
+                fallback_key = digest('case-engagement/no-link/v1', key)
+                created = await self.writer.create_once(
+                    {KEY: key, CASE: case, ACCOUNT: account, **projection},
+                    str(UUID(hex=fallback_key[:32], version=4)),
+                )
             ack = created.get('fields', {})
             if not created.get('record_id') or text_value(ack.get(KEY)) != key:
                 raise AppError(ErrorCode.UPSTREAM_ERROR)
             if any(bool(ack.get(f)) != projection[f] for f in (LIKE, FAVORITE)) or any(
                     ack.get(f) != projection[f] for f in (LIKED_AT, FAVORITED_AT)):
-                await self.writer.write([{'record_id': created['record_id'], 'fields': projection}], update=True)
+                try:
+                    await self.writer.write([{'record_id': created['record_id'], 'fields': used_projection}], update=True)
+                except BitableLinkError:
+                    await self.writer.write([{'record_id': created['record_id'], 'fields': projection}], update=True)
         return await self.db.ack_sync(scope, case, account, row['revision'])
 
     async def sync_once(self):
